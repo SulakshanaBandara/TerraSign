@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -18,16 +20,17 @@ func handleMonitor() {
 	}
 
 	client := remote.NewClient(serviceURL)
-
-	// Clear screen
-	fmt.Print("\033[H\033[2J")
-
+	admin := NewAdminCommands(serviceURL)
+	
+	// Interactive mode
+	scanner := bufio.NewScanner(os.Stdin)
+	
 	for {
-		// Move cursor to top-left
-		fmt.Print("\033[H")
+		// Clear screen and show pending plans
+		fmt.Print("\033[H\033[2J")
 		
 		fmt.Println("=================================================================================")
-		fmt.Println("                       TERRASIGN SECURITY MONITOR                                ")
+		fmt.Println("                   TERRASIGN INTERACTIVE DASHBOARD                              ")
 		fmt.Println("=================================================================================")
 		fmt.Printf("Service: %s   |   Time: %s\n", serviceURL, time.Now().Format("15:04:05"))
 		fmt.Println("---------------------------------------------------------------------------------")
@@ -55,8 +58,68 @@ func handleMonitor() {
 		}
 		
 		fmt.Println("\n---------------------------------------------------------------------------------")
-		fmt.Println("Press Ctrl+C to exit")
+		fmt.Println("Actions: [i]nspect | [s]ign | [r]efresh | [q]uit")
+		fmt.Print("Enter action: ")
 		
-		time.Sleep(2 * time.Second)
+		if !scanner.Scan() {
+			break
+		}
+		
+		action := strings.TrimSpace(strings.ToLower(scanner.Text()))
+		
+		switch action {
+		case "i", "inspect":
+			fmt.Print("Enter submission ID: ")
+			if !scanner.Scan() {
+				continue
+			}
+			id := strings.TrimSpace(scanner.Text())
+			if id != "" {
+				fmt.Println("\n--- Plan Changes ---")
+				if err := admin.Inspect(id); err != nil {
+					fmt.Printf("Error: %v\n", err)
+				}
+				fmt.Print("\nPress Enter to continue...")
+				scanner.Scan()
+			}
+			
+		case "s", "sign":
+			fmt.Print("Enter submission ID: ")
+			if !scanner.Scan() {
+				continue
+			}
+			id := strings.TrimSpace(scanner.Text())
+			
+			fmt.Print("Enter key path (default: admin.key): ")
+			if !scanner.Scan() {
+				continue
+			}
+			keyPath := strings.TrimSpace(scanner.Text())
+			if keyPath == "" {
+				keyPath = "admin.key"
+			}
+			
+			if id != "" {
+				if err := admin.Sign(id, keyPath, "admin"); err != nil {
+					fmt.Printf("Error: %v\n", err)
+				} else {
+					fmt.Println("✓ Plan signed successfully!")
+				}
+				fmt.Print("\nPress Enter to continue...")
+				scanner.Scan()
+			}
+			
+		case "r", "refresh":
+			// Just loop again
+			continue
+			
+		case "q", "quit":
+			fmt.Println("Exiting dashboard...")
+			return
+			
+		default:
+			fmt.Println("Invalid action. Press Enter to continue...")
+			scanner.Scan()
+		}
 	}
 }
