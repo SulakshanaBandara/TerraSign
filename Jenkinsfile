@@ -45,6 +45,38 @@ pipeline {
             }
         }
         
+        stage('Start TerraSign Server') {
+            steps {
+                script {
+                    // Start TerraSign server in background
+                    sh '''
+                        export PATH=$PATH:$HOME/go/bin
+                        
+                        # Kill any existing server on port 8081
+                        pkill -f "terrasign server" || true
+                        
+                        # Start server in background
+                        nohup terrasign server --port 8081 --storage ./demo-storage > terrasign-server.log 2>&1 &
+                        
+                        # Wait for server to be ready
+                        echo "Waiting for TerraSign server to start..."
+                        for i in {1..30}; do
+                            if curl -s http://localhost:8081/list-pending > /dev/null 2>&1; then
+                                echo "TerraSign server is ready!"
+                                exit 0
+                            fi
+                            echo "Attempt $i/30: Server not ready yet..."
+                            sleep 1
+                        done
+                        
+                        echo "ERROR: Server failed to start"
+                        cat terrasign-server.log
+                        exit 1
+                    '''
+                }
+            }
+        }
+        
         stage('Submit for Review') {
             steps {
                 dir('examples/simple-app') {
@@ -101,12 +133,6 @@ pipeline {
     }
     
     post {
-        success {
-            echo 'Deployment successful with verified signature!'
-        }
-        failure {
-            echo 'Deployment failed - check verification logs'
-        }
         always {
             cleanWs()
         }
