@@ -20,11 +20,19 @@ export TERRASIGN_PUBLIC_KEY="./examples/simple-app/admin.pub"
 # Helpful Aliases (forced to port 8081 to avoid Jenkins conflict)
 alias ts='terrasign'
 alias ts-submit='terrasign submit-for-review --service http://localhost:8081'
-alias ts-sign='terrasign admin sign --service http://localhost:8081'
 alias ts-list='terrasign admin list-pending --service http://localhost:8081'
 alias ts-monitor='terrasign monitor --service http://localhost:8081'
 alias ts-lockdown='terrasign lockdown --service http://localhost:8081'
-alias ts-verify='cd examples/simple-app && terrasign wrap --key admin.pub --'
+
+# Use function for sign to run in initialized directory (subshell)
+ts-sign() {
+    (cd examples/simple-app && terrasign admin sign --service http://localhost:8081 "$@")
+}
+
+# Use function for verify to run in initialized directory (but keep user there)
+ts-verify() {
+    cd examples/simple-app && terrasign wrap --key admin.pub -- "$@"
+}
 
 echo "[OK] Environment configured!"
 echo ""
