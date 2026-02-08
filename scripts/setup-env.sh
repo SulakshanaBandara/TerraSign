@@ -35,6 +35,7 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # Unalias before defining functions to avoid conflicts
 unalias ts-sign 2>/dev/null || true
 unalias ts-verify 2>/dev/null || true
+unalias ts-lockdown 2>/dev/null || true
 
 # Use function for sign to run in initialized directory (subshell)
 # It tries to find the directory relative to current location OR project root
