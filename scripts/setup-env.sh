@@ -42,7 +42,23 @@ ts-lockdown() {
     if [ "$mode" = "off" ]; then
         # For lockdown off, use default key path if not specified
         if [[ ! "$@" =~ "--key" ]] && [[ ! "$@" =~ "--recovery-code" ]]; then
-            local default_key="$PROJECT_ROOT/examples/simple-app/admin.key"
+            # Find project root by looking for go.mod
+            local current_dir="$PWD"
+            local project_root="$current_dir"
+            
+            while [ "$project_root" != "/" ]; do
+                if [ -f "$project_root/go.mod" ]; then
+                    break
+                fi
+                project_root="$(dirname "$project_root")"
+            done
+            
+            # If we didn't find go.mod, use current directory
+            if [ ! -f "$project_root/go.mod" ]; then
+                project_root="$current_dir"
+            fi
+            
+            local default_key="$project_root/examples/simple-app/admin.key"
             terrasign lockdown off --service http://localhost:8081 --key "$default_key" "$@"
         else
             terrasign lockdown off --service http://localhost:8081 "$@"
@@ -53,7 +69,7 @@ ts-lockdown() {
     fi
 }
 
-# Get absolute path to project root
+# Get absolute path to project root (for other functions)
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 
