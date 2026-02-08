@@ -35,6 +35,8 @@ func main() {
 		handleAdmin()
 	case "lockdown":
 		handleLockdown()
+	case "monitor":
+		handleMonitor()
 	case "server":
 		handleServer()
 	default:
@@ -53,6 +55,7 @@ func printUsage() {
 	fmt.Println("  wrap                  Wrap terraform apply with verification")
 	fmt.Println("  submit-for-review     Submit plan to signing service (CI workflow)")
 	fmt.Println("  admin                 Admin commands (list, download, sign)")
+	fmt.Println("  monitor               Live security dashboard")
 	fmt.Println("  lockdown              Emergency lockdown control (on/off)")
 	fmt.Println("  server                Start the signing service")
 	fmt.Println("\nUse 'terrasign <command> --help' for more information")

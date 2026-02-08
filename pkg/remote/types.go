@@ -7,7 +7,7 @@ type PlanSubmission struct {
 	ID          string    `json:"id"`
 	PlanHash    string    `json:"plan_hash"`
 	Submitter   string    `json:"submitter"`
-	SubmittedAt time.Time `json:"submitted_at"`
+	CreatedAt   time.Time `json:"created_at"`
 	Status      string    `json:"status"` // pending, approved, rejected
 	ReviewedBy  string    `json:"reviewed_by,omitempty"`
 	ReviewedAt  *time.Time `json:"reviewed_at,omitempty"`

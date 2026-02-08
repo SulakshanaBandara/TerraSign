@@ -38,8 +38,8 @@ func (a *AdminCommands) ListPending() error {
 	for _, sub := range submissions {
 		fmt.Printf("ID: %s\n", sub.ID)
 		fmt.Printf("  Submitter: %s\n", sub.Submitter)
-		fmt.Printf("  Submitted: %s\n", sub.SubmittedAt.Format(time.RFC3339))
-		fmt.Printf("  Status: %s\n", sub.Status)
+		fmt.Printf("  Created:   %s\n", sub.CreatedAt.Format(time.RFC3339))
+		fmt.Printf("  Status:    %s\n", sub.Status)
 		fmt.Println()
 	}
 

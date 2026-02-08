@@ -23,6 +23,11 @@ echo ""
 echo "2. Create a normal plan (Everything OK)"
 cd examples/simple-app
 terraform plan -out=tfplan >/dev/null
+
+echo "Step 2.1: Open Dashboard (Optional)"
+echo "Run 'terrasign monitor' in a separate terminal to see pending plans live!"
+echo ""
+
 terrasign submit-for-review --service http://localhost:8081 tfplan
 echo "[OK] Normal submission succeeded"
 

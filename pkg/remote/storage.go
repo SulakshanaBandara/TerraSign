@@ -50,7 +50,7 @@ func (s *Storage) StorePlan(planData io.Reader, submitter string) (*PlanSubmissi
 	submission := &PlanSubmission{
 		ID:          id,
 		Submitter:   submitter,
-		SubmittedAt: time.Now(),
+		CreatedAt:   time.Now(),
 		Status:      "pending",
 	}
 
