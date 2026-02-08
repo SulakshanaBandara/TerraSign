@@ -17,6 +17,16 @@ export COSIGN_PASSWORD=""
 export TERRASIGN_ADMIN_KEY="./examples/simple-app/admin.key"
 export TERRASIGN_PUBLIC_KEY="./examples/simple-app/admin.pub"
 
+# Unalias ALL potentially conflicting aliases FIRST, before defining anything
+unalias ts 2>/dev/null || true
+unalias ts-submit 2>/dev/null || true
+unalias ts-list 2>/dev/null || true
+unalias ts-inspect 2>/dev/null || true
+unalias ts-monitor 2>/dev/null || true
+unalias ts-lockdown 2>/dev/null || true
+unalias ts-sign 2>/dev/null || true
+unalias ts-verify 2>/dev/null || true
+
 # Helpful Aliases (forced to port 8081 to avoid Jenkins conflict)
 alias ts='terrasign'
 alias ts-submit='terrasign submit-for-review --service http://localhost:8081'
@@ -46,10 +56,6 @@ ts-lockdown() {
 # Get absolute path to project root
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Unalias before defining functions to avoid conflicts
-unalias ts-sign 2>/dev/null || true
-unalias ts-verify 2>/dev/null || true
-unalias ts-lockdown 2>/dev/null || true
 
 # Use function for sign to run in initialized directory (subshell)
 # It tries to find the directory relative to current location OR project root
