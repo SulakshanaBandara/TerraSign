@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -90,13 +91,49 @@ func handleMonitor() {
 			}
 			id := strings.TrimSpace(scanner.Text())
 			
-			fmt.Print("Enter key path (default: admin.key): ")
+			// Find project root to construct absolute path
+			cwd, _ := os.Getwd()
+			projectRoot := cwd
+			for {
+				if _, err := os.Stat(filepath.Join(projectRoot, "go.mod")); err == nil {
+					break
+				}
+				parent := filepath.Dir(projectRoot)
+				if parent == projectRoot {
+					projectRoot = cwd
+					break
+				}
+				projectRoot = parent
+			}
+			
+			defaultKeyPath := filepath.Join(projectRoot, "examples", "simple-app", "admin.key")
+			
+			fmt.Printf("\nDefault key path: %s\n", defaultKeyPath)
+			fmt.Println("Options:")
+			fmt.Println("  [1] Use default path")
+			fmt.Println("  [2] Enter custom path")
+			fmt.Print("Choose option (1 or 2): ")
+			
 			if !scanner.Scan() {
 				continue
 			}
-			keyPath := strings.TrimSpace(scanner.Text())
-			if keyPath == "" {
-				keyPath = "admin.key"
+			choice := strings.TrimSpace(scanner.Text())
+			
+			var keyPath string
+			if choice == "2" {
+				fmt.Print("Enter custom key path: ")
+				if !scanner.Scan() {
+					continue
+				}
+				keyPath = strings.TrimSpace(scanner.Text())
+				if keyPath == "" {
+					fmt.Println("Error: Key path cannot be empty")
+					fmt.Print("\nPress Enter to continue...")
+					scanner.Scan()
+					continue
+				}
+			} else {
+				keyPath = defaultKeyPath
 			}
 			
 			if id != "" {
