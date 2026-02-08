@@ -21,6 +21,7 @@ export TERRASIGN_PUBLIC_KEY="./examples/simple-app/admin.pub"
 alias ts='terrasign'
 alias ts-submit='terrasign submit-for-review --service http://localhost:8081'
 alias ts-list='terrasign admin list-pending --service http://localhost:8081'
+alias ts-inspect='terrasign admin inspect --service http://localhost:8081'
 alias ts-monitor='terrasign monitor --service http://localhost:8081'
 alias ts-lockdown='terrasign lockdown --service http://localhost:8081'
 
@@ -63,11 +64,12 @@ echo ""
 echo "Available aliases:"
 echo "  ts          - terrasign command"
 echo "  ts-submit   - Submit plan for review"
+echo "  ts-list     - List pending submissions"
+echo "  ts-inspect  - Inspect plan changes (usage: ts-inspect <ID>)"
 echo "  ts-sign     - Sign a plan (usage: ts-sign <ID>)"
 echo "  ts-monitor  - Live security dashboard"
 echo "  ts-lockdown - Emergency lockdown control"
 echo "  ts-verify   - Wrapper to verify & apply (usage: ts-verify apply tfplan)"
-echo "  ts-list     - List pending submissions"
 echo ""
 echo "Example workflow:"
 echo "  1. ts-submit --wait tfplan"

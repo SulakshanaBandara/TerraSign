@@ -65,9 +65,31 @@ func (a *AdminCommands) Inspect(id string) error {
 
 	// Run terraform show to display the changes
 	// We need to run this from an initialized terraform directory
-	// For simplicity, we'll run it from examples/simple-app
+	// Get absolute path to examples/simple-app
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get working directory: %w", err)
+	}
+	
+	// Try to find the project root by looking for go.mod
+	projectRoot := cwd
+	for {
+		if _, err := os.Stat(filepath.Join(projectRoot, "go.mod")); err == nil {
+			break
+		}
+		parent := filepath.Dir(projectRoot)
+		if parent == projectRoot {
+			// Reached filesystem root, use cwd
+			projectRoot = cwd
+			break
+		}
+		projectRoot = parent
+	}
+	
+	terraformDir := filepath.Join(projectRoot, "examples", "simple-app")
+	
 	cmd := exec.Command("terraform", "show", planPath)
-	cmd.Dir = "examples/simple-app" // Must be run from initialized directory
+	cmd.Dir = terraformDir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
