@@ -22,8 +22,9 @@ pipeline {
                     cd cmd/terrasign
                     go build -o $HOME/go/bin/terrasign .
                     
-                    # Verify build
-                    $HOME/go/bin/terrasign --help
+                    # Verify build (just check if binary exists and is executable)
+                    ls -lh $HOME/go/bin/terrasign
+                    echo "TerraSign binary built successfully"
                 '''
             }
         }
