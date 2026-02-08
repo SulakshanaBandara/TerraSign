@@ -23,7 +23,11 @@ alias ts-submit='terrasign submit-for-review --service http://localhost:8081'
 alias ts-list='terrasign admin list-pending --service http://localhost:8081'
 alias ts-inspect='terrasign admin inspect --service http://localhost:8081'
 alias ts-monitor='terrasign monitor --service http://localhost:8081'
-alias ts-lockdown='terrasign lockdown --service http://localhost:8081'
+
+# Use function for lockdown to properly pass the on/off argument
+ts-lockdown() {
+    terrasign lockdown --service http://localhost:8081 "$@"
+}
 
 # Get absolute path to project root
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
