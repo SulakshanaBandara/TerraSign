@@ -13,7 +13,7 @@ import (
 	"github.com/sulakshanakarunarathne/terrasign/pkg/verifier"
 )
 
-const defaultServiceURL = "http://localhost:8080"
+const defaultServiceURL = "http://localhost:8081"
 
 func main() {
 	if len(os.Args) < 2 {

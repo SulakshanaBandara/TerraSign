@@ -2,9 +2,8 @@
 # Place this in project root or ~/.terrasign.yaml
 
 # Signing Service Configuration
-service:
-  url: http://localhost:8081
-  timeout: 5m
+service_url: "http://localhost:8081"
+timeout: 5m
 
 # Key Paths (relative to project root)
 keys:
