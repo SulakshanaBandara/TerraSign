@@ -86,17 +86,29 @@ func (a *AdminCommands) Inspect(id string) error {
 		projectRoot = parent
 	}
 	
+	// Use a dummy directory for terraform show if a specific one isn't needed for the command itself
+	// The original code used `terraformDir` for `cmd.Dir`.
+	// The new code snippet implies `cmd.Dir = tfDir` but `tfDir` is not defined.
+	// To maintain functionality and syntactic correctness, we'll keep the `terraformDir` calculation
+	// and use it for `cmd.Dir`.
 	terraformDir := filepath.Join(projectRoot, "examples", "simple-app")
 	
+	// Run terraform show
 	cmd := exec.Command("terraform", "show", planPath)
-	cmd.Dir = terraformDir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to show plan: %w", err)
+	cmd.Dir = terraformDir // Keep the original working directory for terraform command
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// Check if it's a version mismatch error
+		if strings.Contains(string(output), "plan file was created by Terraform") {
+			fmt.Println("\n[WARNING] Terraform version mismatch - cannot inspect plan details")
+			fmt.Println("This plan was created with a different Terraform version.")
+			fmt.Println("You can still sign it, but detailed inspection is unavailable.")
+			return nil
+		}
+		return fmt.Errorf("failed to show plan: %w\nOutput: %s", err, output)
 	}
-
+	
+	fmt.Println(string(output))
 	return nil
 }
 
