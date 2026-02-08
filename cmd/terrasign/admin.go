@@ -2,9 +2,13 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/sulakshanakarunarathne/terrasign/pkg/remote"
