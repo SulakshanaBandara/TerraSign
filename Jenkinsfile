@@ -60,13 +60,16 @@ pipeline {
                         
                         # Wait for server to be ready
                         echo "Waiting for TerraSign server to start..."
-                        for i in {1..30}; do
+                        attempt=1
+                        max_attempts=30
+                        while [ $attempt -le $max_attempts ]; do
                             if curl -s http://localhost:8081/list-pending > /dev/null 2>&1; then
                                 echo "TerraSign server is ready!"
                                 exit 0
                             fi
-                            echo "Attempt $i/30: Server not ready yet..."
+                            echo "Attempt $attempt/$max_attempts: Server not ready yet..."
                             sleep 1
+                            attempt=$((attempt + 1))
                         done
                         
                         echo "ERROR: Server failed to start"
