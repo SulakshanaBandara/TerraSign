@@ -17,7 +17,7 @@ cd examples/simple-app
 
 echo "Step 1: Creating Terraform Plan..."
 terraform plan -out=tfplan
-echo "✓ Plan created"
+echo "[OK] Plan created"
 echo ""
 
 echo "Step 2: Submitting plan for review..."
@@ -37,12 +37,12 @@ echo ""
 echo "Step 4: Admin signs the plan..."
 echo "Running: terrasign admin sign $PLAN_ID --key admin.key"
 terrasign admin sign $PLAN_ID --key admin.key --service $TERRASIGN_SERVICE
-echo "✓ Plan signed"
+echo "[OK] Plan signed"
 echo ""
 
 echo "Step 5: Downloading signature..."
 curl -s -o tfplan.sig http://localhost:8081/download/$PLAN_ID/signature
-echo "✓ Signature downloaded"
+echo "[OK] Signature downloaded"
 echo ""
 
 echo "Step 6: Verifying and applying plan..."

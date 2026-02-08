@@ -9,6 +9,24 @@ pipeline {
     }
     
     stages {
+        stage('Install TerraSign') {
+            steps {
+                sh '''
+                    # Install Go if not available
+                    which go || (echo "Go not installed" && exit 1)
+                    
+                    # Install terrasign
+                    go install github.com/sulakshanakarunarathne/terrasign/cmd/terrasign@latest
+                    
+                    # Add to PATH for this session
+                    export PATH=$PATH:$HOME/go/bin
+                    
+                    # Verify installation
+                    terrasign --help || echo "TerraSign installed but not in PATH"
+                '''
+            }
+        }
+        
         stage('Checkout') {
             steps {
                 checkout scm
@@ -37,7 +55,10 @@ pipeline {
                     script {
                         // Submit plan to signing service
                         def output = sh(
-                            script: "terrasign submit-for-review --service ${TERRASIGN_SERVICE} tfplan",
+                            script: """
+                                export PATH=\$PATH:\$HOME/go/bin
+                                terrasign submit-for-review --service ${TERRASIGN_SERVICE} tfplan
+                            """,
                             returnStdout: true
                         ).trim()
                         
@@ -74,7 +95,10 @@ pipeline {
             steps {
                 dir('examples/simple-app') {
                     // Use terrasign wrapper to verify before applying
-                    sh "terrasign wrap --key ${ADMIN_PUBLIC_KEY} -- apply tfplan"
+                    sh """
+                        export PATH=\$PATH:\$HOME/go/bin
+                        terrasign wrap --key ${ADMIN_PUBLIC_KEY} -- apply tfplan
+                    """
                 }
             }
         }

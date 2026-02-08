@@ -24,7 +24,7 @@ alias ts-sign='cd examples/simple-app && terrasign admin sign --service $TERRASI
 alias ts-verify='cd examples/simple-app && terrasign wrap --key admin.pub --'
 alias ts-list='terrasign admin list-pending --service $TERRASIGN_SERVICE'
 
-echo "✓ Environment configured!"
+echo "[OK] Environment configured!"
 echo ""
 echo "Available aliases:"
 echo "  ts          - terrasign command"
