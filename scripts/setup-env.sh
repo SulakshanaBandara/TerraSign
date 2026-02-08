@@ -47,8 +47,9 @@ ts-sign() {
 # Use function for verify to run in initialized directory
 ts-verify() {
     local target_dir="$PROJECT_ROOT/examples/simple-app"
+    # Change to target directory if it exists and we're not already there
     if [ -d "$target_dir" ]; then
-        cd "$target_dir"
+        cd "$target_dir" || return 1
     fi
     terrasign wrap --key admin.pub -- "$@"
 }
