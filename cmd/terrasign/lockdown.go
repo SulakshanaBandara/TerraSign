@@ -42,15 +42,14 @@ func handleLockdown() {
 			fmt.Println("\nOptions:")
 			fmt.Println("  1. Use admin key:       terrasign lockdown off --key <path>")
 			fmt.Println("  2. Use recovery code:   terrasign lockdown off --recovery-code <code>")
-			fmt.Println("\nEmergency Recovery Code: TERRASIGN-EMERGENCY-2024")
-			fmt.Println("(In production, this would be securely stored and rotated)")
+			fmt.Println("\n(Recovery code is documented in security documentation)")
 			os.Exit(1)
 		}
 		
 		// Verify authentication
 		if recoveryCode != "" {
 			// Check recovery code
-			if recoveryCode != "TERRASIGN-EMERGENCY-2024" {
+			if recoveryCode != "TERRASIGN-EMERGENCY" {
 				fmt.Println("\n[ERROR] Invalid recovery code!")
 				os.Exit(1)
 			}
@@ -59,8 +58,7 @@ func handleLockdown() {
 			// Verify key exists
 			if _, err := os.Stat(keyPath); os.IsNotExist(err) {
 				fmt.Printf("\n[ERROR] Key file not found: %s\n", keyPath)
-				fmt.Println("\nAlternatively, use recovery code:")
-				fmt.Println("  terrasign lockdown off --recovery-code TERRASIGN-EMERGENCY-2024")
+				fmt.Println("\nAlternatively, use recovery code (see security documentation)")
 				os.Exit(1)
 			}
 			fmt.Printf("\n[OK] Admin key verified: %s\n", keyPath)
@@ -76,10 +74,9 @@ func handleLockdown() {
 	if mode == "on" {
 		fmt.Println("\n[!!!] EMERGENCY LOCKDOWN ACTIVATED [!!!]")
 		fmt.Println("System is now rejecting ALL plan submissions and signatures.")
-		fmt.Println("\nTo deactivate, use:")
+		fmt.Println("\nTo deactivate:")
 		fmt.Println("  terrasign lockdown off --key <admin-key-path>")
-		fmt.Println("  OR")
-		fmt.Println("  terrasign lockdown off --recovery-code TERRASIGN-EMERGENCY-2024")
+		fmt.Println("  OR use emergency recovery code (see security documentation)")
 	} else {
 		fmt.Println("\n[OK] Lockdown lifted. System resumes normal operation.")
 	}
