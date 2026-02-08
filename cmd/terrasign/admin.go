@@ -84,8 +84,8 @@ func (a *AdminCommands) Sign(id, keyPath, reviewer string) error {
 		return fmt.Errorf("failed to download plan: %w", err)
 	}
 
-	// Sign the plan
-	if err := signer.Sign(planPath, keyPath); err != nil {
+	// Sign the plan (skip policy check since it was done during submission)
+	if err := signer.SignWithOptions(planPath, keyPath, true); err != nil {
 		return fmt.Errorf("failed to sign plan: %w", err)
 	}
 

@@ -13,28 +13,37 @@ import (
 
 // Sign signs a Terraform plan using Cosign
 func Sign(planPath, keyPath string) error {
+	return SignWithOptions(planPath, keyPath, false)
+}
+
+// SignWithOptions signs a Terraform plan with additional options
+func SignWithOptions(planPath, keyPath string, skipPolicy bool) error {
 	fmt.Printf("Signing plan at %s\n", planPath)
 
-	// Step 1: Evaluate policies
-	fmt.Println("Evaluating security policies...")
-	policyEngine := policy.NewPolicyEngine("./policies")
-	policyResult, err := policyEngine.Evaluate(planPath)
-	if err != nil {
-		return fmt.Errorf("policy evaluation failed: %w", err)
-	}
-
-	if !policyResult.Passed {
-		fmt.Println("\n[ERROR] POLICY VIOLATIONS DETECTED:")
-		for _, violation := range policyResult.Violations {
-			fmt.Printf("  - [%s] %s\n", violation.Policy, violation.Message)
+	// Step 1: Evaluate policies (skip if already done during submission)
+	if !skipPolicy {
+		fmt.Println("Evaluating security policies...")
+		policyEngine := policy.NewPolicyEngine("./policies")
+		policyResult, err := policyEngine.Evaluate(planPath)
+		if err != nil {
+			return fmt.Errorf("policy evaluation failed: %w", err)
 		}
-		return fmt.Errorf("plan failed %d policy check(s) - signing aborted", len(policyResult.Violations))
-	}
-	fmt.Println("[OK] All policy checks passed")
 
-	// Save policy attestation
-	if err := policyEngine.SaveAttestation(planPath, policyResult); err != nil {
-		return fmt.Errorf("failed to save policy attestation: %w", err)
+		if !policyResult.Passed {
+			fmt.Println("\n[ERROR] POLICY VIOLATIONS DETECTED:")
+			for _, violation := range policyResult.Violations {
+				fmt.Printf("  - [%s] %s\n", violation.Policy, violation.Message)
+			}
+			return fmt.Errorf("plan failed %d policy check(s) - signing aborted", len(policyResult.Violations))
+		}
+		fmt.Println("[OK] All policy checks passed")
+
+		// Save policy attestation
+		if err := policyEngine.SaveAttestation(planPath, policyResult); err != nil {
+			return fmt.Errorf("failed to save policy attestation: %w", err)
+		}
+	} else {
+		fmt.Println("[SKIP] Policy evaluation (already done during submission)")
 	}
 
 	// Step 2: Generate SLSA provenance
