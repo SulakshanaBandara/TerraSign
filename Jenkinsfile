@@ -9,27 +9,22 @@ pipeline {
     }
     
     stages {
-        stage('Install TerraSign') {
-            steps {
-                sh '''
-                    # Install Go if not available
-                    which go || (echo "Go not installed" && exit 1)
-                    
-                    # Install terrasign
-                    go install github.com/sulakshanakarunarathne/terrasign/cmd/terrasign@latest
-                    
-                    # Add to PATH for this session
-                    export PATH=$PATH:$HOME/go/bin
-                    
-                    # Verify installation
-                    terrasign --help || echo "TerraSign installed but not in PATH"
-                '''
-            }
-        }
-        
         stage('Checkout') {
             steps {
                 checkout scm
+            }
+        }
+        
+        stage('Build TerraSign') {
+            steps {
+                sh '''
+                    # Build terrasign from source
+                    cd cmd/terrasign
+                    go build -o $HOME/go/bin/terrasign .
+                    
+                    # Verify build
+                    $HOME/go/bin/terrasign --help
+                '''
             }
         }
         
