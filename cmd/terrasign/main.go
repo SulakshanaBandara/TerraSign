@@ -212,6 +212,40 @@ func handleAdmin() {
 		return
 	}
 
+	// Check inspect
+	if args[0] == "inspect" {
+		fs := flag.NewFlagSet("inspect", flag.ExitOnError)
+		srv := fs.String("service", defaultServiceURL, "Service URL")
+		
+		// Parse to get service URL
+		for i, arg := range args {
+			if arg == "--service" && i+1 < len(args) {
+				serviceURL = args[i+1]
+			}
+		}
+		
+		// Get ID (first non-flag argument)
+		var id string
+		for _, arg := range args[1:] {
+			if !strings.HasPrefix(arg, "--") && arg != *srv {
+				id = arg
+				break
+			}
+		}
+		
+		if id == "" {
+			fmt.Println("Usage: terrasign admin inspect <submission-id> [--service <url>]")
+			os.Exit(1)
+		}
+		
+		admin := NewAdminCommands(serviceURL)
+		if err := admin.Inspect(id); err != nil {
+			fmt.Printf("Error: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	// Check download
 	if args[0] == "download" {
 		fs := flag.NewFlagSet("download", flag.ExitOnError)

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -41,6 +42,37 @@ func (a *AdminCommands) ListPending() error {
 		fmt.Printf("  Created:   %s\n", sub.CreatedAt.Format(time.RFC3339))
 		fmt.Printf("  Status:    %s\n", sub.Status)
 		fmt.Println()
+	}
+
+	return nil
+}
+
+// Inspect shows what changes are in a plan
+func (a *AdminCommands) Inspect(id string) error {
+	fmt.Printf("Inspecting plan %s...\n\n", id)
+
+	// Download the plan to a temp location
+	tempDir := filepath.Join(os.TempDir(), "terrasign-inspect", id)
+	if err := os.MkdirAll(tempDir, 0755); err != nil {
+		return fmt.Errorf("failed to create temp directory: %w", err)
+	}
+	defer os.RemoveAll(tempDir) // Clean up after inspection
+
+	planPath := filepath.Join(tempDir, "tfplan")
+	if err := a.client.DownloadPlan(id, planPath); err != nil {
+		return fmt.Errorf("failed to download plan: %w", err)
+	}
+
+	// Run terraform show to display the changes
+	// We need to run this from an initialized terraform directory
+	// For simplicity, we'll run it from examples/simple-app
+	cmd := exec.Command("terraform", "show", planPath)
+	cmd.Dir = "examples/simple-app" // Must be run from initialized directory
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to show plan: %w", err)
 	}
 
 	return nil
