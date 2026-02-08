@@ -30,11 +30,12 @@ func NewSigningService(config SigningServiceConfig) (*SigningService, error) {
 
 // Start starts the HTTP server
 func (s *SigningService) Start() error {
-	http.HandleFunc("/submit", s.handleSubmit)
-	http.HandleFunc("/status/", s.handleStatus)
-	http.HandleFunc("/download/", s.handleDownload)
-	http.HandleFunc("/list-pending", s.handleListPending)
-	http.HandleFunc("/upload-signature/", s.handleUploadSignature)
+	http.HandleFunc("/submit", s.checkLockdown(s.handleSubmit))
+	http.HandleFunc("/status/", s.checkLockdown(s.handleStatus))
+	http.HandleFunc("/download/", s.checkLockdown(s.handleDownload))
+	http.HandleFunc("/list-pending", s.checkLockdown(s.handleListPending))
+	http.HandleFunc("/upload-signature/", s.checkLockdown(s.handleUploadSignature))
+	http.HandleFunc("/lockdown", s.handleLockdown) // No middleware for lockdown handler
 
 	addr := fmt.Sprintf(":%d", s.config.Port)
 	fmt.Printf("Starting signing service on %s\n", addr)

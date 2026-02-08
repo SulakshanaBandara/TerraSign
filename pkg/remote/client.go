@@ -188,3 +188,28 @@ func (c *Client) UploadSignature(id, signaturePath string) error {
 
 	return nil
 }
+
+// SetLockdown enables or disables emergency lockdown
+func (c *Client) SetLockdown(enable bool) error {
+	status := "off"
+	if enable {
+		status = "on"
+	}
+	
+	resp, err := http.Post(
+		fmt.Sprintf("%s/lockdown?mode=%s", c.baseURL, status),
+		"application/json",
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("server returned error: %s", string(body))
+	}
+
+	return nil
+}
