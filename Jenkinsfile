@@ -93,7 +93,8 @@ pipeline {
                     // Use terrasign wrapper to verify before applying
                     sh """
                         export PATH=\$PATH:\$HOME/go/bin
-                        terrasign wrap --key ${ADMIN_PUBLIC_KEY} -- apply tfplan
+                        # Use the admin public key from the workspace
+                        terrasign wrap --key admin.pub -- apply tfplan
                     """
                 }
             }
