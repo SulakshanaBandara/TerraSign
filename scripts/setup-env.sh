@@ -24,14 +24,33 @@ alias ts-list='terrasign admin list-pending --service http://localhost:8081'
 alias ts-monitor='terrasign monitor --service http://localhost:8081'
 alias ts-lockdown='terrasign lockdown --service http://localhost:8081'
 
+# Get absolute path to project root
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 # Use function for sign to run in initialized directory (subshell)
+# It tries to find the directory relative to current location OR project root
 ts-sign() {
-    (cd examples/simple-app && terrasign admin sign --service http://localhost:8081 "$@")
+    local target_dir="$PROJECT_ROOT/examples/simple-app"
+    (
+        if [ -d "$target_dir" ]; then
+            cd "$target_dir"
+        fi
+        # If we are already in the directory, the above might effectively do nothing or cd to same place.
+        # If the user is somewhere else, it jumps to the right place.
+        
+        # We also need to fix the key path to be absolute or relative to the new dir
+        # The simplest way is to assume the key is in the target_dir
+        terrasign admin sign --service http://localhost:8081 "$@"
+    )
 }
 
-# Use function for verify to run in initialized directory (but keep user there)
+# Use function for verify to run in initialized directory
 ts-verify() {
-    cd examples/simple-app && terrasign wrap --key admin.pub -- "$@"
+    local target_dir="$PROJECT_ROOT/examples/simple-app"
+    if [ -d "$target_dir" ]; then
+        cd "$target_dir"
+    fi
+    terrasign wrap --key admin.pub -- "$@"
 }
 
 echo "[OK] Environment configured!"
@@ -42,7 +61,7 @@ echo "  ts-submit   - Submit plan for review"
 echo "  ts-sign     - Sign a plan (usage: ts-sign <ID>)"
 echo "  ts-monitor  - Live security dashboard"
 echo "  ts-lockdown - Emergency lockdown control"
-echo "  ts-verify   - Wrapper to verify & apply" (usage: ts-verify apply tfplan)"
+echo "  ts-verify   - Wrapper to verify & apply (usage: ts-verify apply tfplan)"
 echo "  ts-list     - List pending submissions"
 echo ""
 echo "Example workflow:"
