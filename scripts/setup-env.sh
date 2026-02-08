@@ -26,7 +26,21 @@ alias ts-monitor='terrasign monitor --service http://localhost:8081'
 
 # Use function for lockdown to properly pass the on/off argument
 ts-lockdown() {
-    terrasign lockdown --service http://localhost:8081 "$@"
+    local mode="$1"
+    shift
+    
+    if [ "$mode" = "off" ]; then
+        # For lockdown off, use default key path if not specified
+        if [[ ! "$@" =~ "--key" ]] && [[ ! "$@" =~ "--recovery-code" ]]; then
+            local default_key="$PROJECT_ROOT/examples/simple-app/admin.key"
+            terrasign lockdown off --service http://localhost:8081 --key "$default_key" "$@"
+        else
+            terrasign lockdown off --service http://localhost:8081 "$@"
+        fi
+    else
+        # For lockdown on, no key required
+        terrasign lockdown "$mode" --service http://localhost:8081 "$@"
+    fi
 }
 
 # Get absolute path to project root
