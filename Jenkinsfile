@@ -29,6 +29,25 @@ pipeline {
             }
         }
         
+        stage('Install Terraform') {
+            steps {
+                sh '''
+                    # Check current Terraform version
+                    terraform version || echo "Terraform not found"
+                    
+                    # Install Terraform 1.14.1 to match local version
+                    cd /tmp
+                    wget -q https://releases.hashicorp.com/terraform/1.14.1/terraform_1.14.1_linux_amd64.zip
+                    unzip -o terraform_1.14.1_linux_amd64.zip
+                    sudo mv terraform /usr/local/bin/
+                    rm terraform_1.14.1_linux_amd64.zip
+                    
+                    # Verify installation
+                    terraform version
+                '''
+            }
+        }
+        
         stage('Terraform Init') {
             steps {
                 dir('examples/simple-app') {
