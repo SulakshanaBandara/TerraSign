@@ -1,0 +1,18 @@
+# TerraSign Configuration File
+# Place this in project root or ~/.terrasign.yaml
+
+# Signing Service Configuration
+service:
+  url: http://localhost:8081
+  timeout: 5m
+
+# Key Paths (relative to project root)
+keys:
+  admin_private: examples/simple-app/admin.key
+  admin_public: examples/simple-app/admin.pub
+
+# Default Settings
+defaults:
+  submitter: ci-pipeline
+  reviewer: admin
+  wait_for_signature: true

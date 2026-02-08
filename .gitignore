@@ -1,0 +1,57 @@
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+tfplan
+tfplan.*
+
+# TerraSign artifacts (generated during signing)
+*.sig
+*.bundle
+*.policy
+*.provenance
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+vendor/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Demo/Test data
+demo-storage/
+signing-storage/
+review/
+
+# Private keys (NEVER commit these!)
+*.key
+!admin.key  # Exception: demo key for educational purposes only
+cosign.key
+cosign.pub
+
+# Temporary files
+tmp/
+temp/
+*.tmp

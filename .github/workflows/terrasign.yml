@@ -1,0 +1,90 @@
+name: TerraSign Separation of Duties
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  terraform-plan:
+    name: Terraform Plan & Submit
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+  plan:
+    name: Create and Submit Plan
+    runs-on: ubuntu-latest
+    outputs:
+      plan_id: ${{ steps.submit.outputs.plan_id }}
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+    
+    - name: Setup TerraSign
+      run: |
+        go install github.com/sulakshanakarunarathne/terrasign/cmd/terrasign@latest
+      
+    - name: Terraform Init
+      run: terraform init
+      working-directory: examples/simple-app
+      
+    - name: Terraform Plan
+      run: terraform plan -out=tfplan
+      working-directory: examples/simple-app
+      
+    - name: Submit Plan for Review
+      id: submit
+      run: |
+        OUTPUT=$(terrasign submit-for-review --service $TERRASIGN_SERVICE tfplan)
+        PLAN_ID=$(echo "$OUTPUT" | grep "Submission ID:" | awk '{print $3}')
+        echo "plan_id=$PLAN_ID" >> $GITHUB_OUTPUT
+        echo "Plan submitted: $PLAN_ID"
+      working-directory: examples/simple-app
+    
+    - name: Upload Plan Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: terraform-plan
+        path: examples/simple-app/tfplan
+
+  # This job requires manual approval from security admin
+  terraform-apply:
+    name: Terraform Apply (After Admin Approval)
+    runs-on: ubuntu-latest
+    needs: terraform-plan
+    environment: production  # Requires manual approval in GitHub
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Download Plan
+      uses: actions/download-artifact@v3
+      with:
+        name: terraform-plan
+        path: examples/simple-app
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+
+    - name: Install TerraSign
+      run: go install github.com/sulakshanakarunarathne/terrasign/cmd/terrasign@latest
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+
+    - name: Terraform Apply (Verified)
+      run: |
+        cd examples/simple-app
+        # Verification enforced - only signed plans can be applied
+        terrasign wrap --key ${{ secrets.ADMIN_PUBLIC_KEY }} -- apply tfplan
+      env:
+        ADMIN_PUBLIC_KEY: admin.pub

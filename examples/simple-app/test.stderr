@@ -1,0 +1,2 @@
+Error: must provide --bundle with --signing-config or --use-signing-config
+error during command execution: must provide --bundle with --signing-config or --use-signing-config
