@@ -72,7 +72,7 @@ func handleLockdown() {
 	}
 
 	if mode == "on" {
-		fmt.Println("\n[!!!] EMERGENCY LOCKDOWN ACTIVATED [!!!]")
+		fmt.Println("\n[EMERGENCY LOCKDOWN ACTIVATED]")
 		fmt.Println("System is now rejecting ALL plan submissions and signatures.")
 		fmt.Println("\nTo deactivate:")
 		fmt.Println("  terrasign lockdown off --key <admin-key-path>")

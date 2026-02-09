@@ -140,7 +140,7 @@ func handleMonitor() {
 				if err := admin.Sign(id, keyPath, "admin"); err != nil {
 					fmt.Printf("Error: %v\n", err)
 				} else {
-					fmt.Println("✓ Plan signed successfully!")
+					fmt.Println("[OK] Plan signed successfully")
 				}
 				fmt.Print("\nPress Enter to continue...")
 				scanner.Scan()

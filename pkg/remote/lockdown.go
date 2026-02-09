@@ -23,17 +23,17 @@ func (s *SigningService) handleLockdown(w http.ResponseWriter, r *http.Request) 
 	if mode == "on" {
 		// Create lockdown file
 		if err := os.WriteFile(lockdownFile, []byte("EMERGENCY LOCKDOWN"), 0644); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to enable lockdown: %v", err), http.StatusInternalServerError)
+			http.Error(w, "Failed to enable lockdown", http.StatusInternalServerError)
 			return
 		}
-		fmt.Println("[!!!] EMERGENCY LOCKDOWN ENABLED [!!!]")
+		fmt.Println("[EMERGENCY LOCKDOWN ENABLED]")
 	} else {
 		// Remove lockdown file
 		if err := os.Remove(lockdownFile); err != nil && !os.IsNotExist(err) {
-			http.Error(w, fmt.Sprintf("Failed to disable lockdown: %v", err), http.StatusInternalServerError)
+			http.Error(w, "Failed to disable lockdown", http.StatusInternalServerError)
 			return
 		}
-		fmt.Println("[OK] Lockdown disabled")
+		fmt.Println("[LOCKDOWN DISABLED]")
 	}
 
 	w.WriteHeader(http.StatusOK)

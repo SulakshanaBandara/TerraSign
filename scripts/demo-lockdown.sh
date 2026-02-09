@@ -51,7 +51,7 @@ fi
 
 echo ""
 echo "==================================================="
-echo "✅ SCENARIO: THREAT NEUTRALIZED"
+echo "[SCENARIO: THREAT NEUTRALIZED]"
 echo "==================================================="
 echo "Invigilator is impressed."
 echo ""
