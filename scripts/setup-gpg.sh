@@ -17,8 +17,9 @@ fi
 
 echo "[1/5] Checking for existing GPG keys..."
 existing_keys=$(gpg --list-secret-keys --keyid-format=long 2>/dev/null | grep -c "^sec" || echo "0")
+existing_keys=$(echo "$existing_keys" | tr -d '\n')
 
-if [ "$existing_keys" -gt 0 ]; then
+if [ "$existing_keys" -gt 0 ] 2>/dev/null; then
     echo "Found $existing_keys existing GPG key(s)"
     gpg --list-secret-keys --keyid-format=long
     echo ""
