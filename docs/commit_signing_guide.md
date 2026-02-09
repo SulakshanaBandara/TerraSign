@@ -13,16 +13,16 @@ This guide covers **Layer 1: Git Commit Signing**.
 
 ## Why Sign Commits?
 
-**Without signing:**
+Without signing:
 - Anyone can impersonate you by setting `git config user.name "Your Name"`
 - No proof of who actually wrote the code
 - Attackers can inject malicious code
 
-**With signing:**
-- ✅ Cryptographic proof of authorship
-- ✅ GitHub shows "Verified" badge
-- ✅ CI/CD can reject unsigned commits
-- ✅ Complete audit trail
+With signing:
+- Cryptographic proof of authorship
+- GitHub shows "Verified" badge
+- CI/CD can reject unsigned commits
+- Complete audit trail
 
 ## Quick Setup
 
