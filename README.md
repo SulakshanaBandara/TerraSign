@@ -23,7 +23,34 @@ Developer → CI (Plan) → Signing Service → Admin Review → CI (Apply)
 
 **Key Principle:** The system that creates the plan (CI) cannot sign it. Only security admins with the private key can approve deployments.
 
+## Multi-Layer Security Architecture
+
+TerraSign implements **defense in depth** with four security layers:
+
+1. **Layer 1: Git Commit Signing** - Cryptographic proof of code authorship (GPG)
+2. **Layer 2: Terraform Plan Signing** - Admin approval for infrastructure changes (Cosign)
+3. **Layer 3: Policy Enforcement** - Automated security rules (OPA)
+4. **Layer 4: SLSA Provenance** - Complete audit trail and supply chain security
+
+This multi-layer approach ensures that even if one layer is compromised, others provide protection.
+
 ## Quick Start
+
+### For Developers
+
+1. **Setup GPG signing:**
+   ```bash
+   ./scripts/setup-gpg.sh
+   ```
+
+2. **Add your public key to GitHub** (see output from setup script)
+
+3. **Make signed commits:**
+   ```bash
+   git commit -m "Your changes"  # Automatically signed
+   ```
+
+### For Admins
 
 ### Installation
 
