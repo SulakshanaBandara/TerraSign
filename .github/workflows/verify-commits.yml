@@ -1,0 +1,75 @@
+name: Verify Commit Signatures
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  verify-commits:
+    name: Verify GPG Signatures
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch all history for signature verification
+      
+      - name: Import trusted GPG keys
+        run: |
+          # Import developer public keys from repository
+          if [ -d ".github/gpg-keys" ]; then
+            for key_file in .github/gpg-keys/*.asc; do
+              if [ -f "$key_file" ]; then
+                echo "Importing key: $key_file"
+                gpg --import "$key_file"
+              fi
+            done
+          fi
+      
+      - name: Verify commit signatures
+        run: |
+          echo "Verifying commit signatures..."
+          
+          # Get list of commits in this push/PR
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            # For PRs, check commits between base and head
+            commits=$(git rev-list ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }})
+          else
+            # For pushes, check the latest commit
+            commits="${{ github.sha }}"
+          fi
+          
+          failed=0
+          for commit in $commits; do
+            echo "Checking commit: $commit"
+            
+            # Verify signature
+            if git verify-commit "$commit" 2>&1; then
+              echo "✓ Commit $commit has valid signature"
+            else
+              echo "✗ Commit $commit has INVALID or MISSING signature!"
+              failed=1
+            fi
+          done
+          
+          if [ $failed -eq 1 ]; then
+            echo ""
+            echo "========================================="
+            echo "ERROR: Some commits are not properly signed!"
+            echo "========================================="
+            echo ""
+            echo "All commits must be signed with a GPG key."
+            echo "See docs/commit_signing_guide.md for setup instructions."
+            exit 1
+          fi
+          
+          echo ""
+          echo "✓ All commits are properly signed!"
+      
+      - name: Report results
+        if: always()
+        run: |
+          echo "Commit signature verification complete"

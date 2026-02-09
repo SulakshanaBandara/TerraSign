@@ -15,6 +15,35 @@ pipeline {
             }
         }
         
+        stage('Verify Commit Signatures') {
+            steps {
+                script {
+                    // Verify the latest commit is signed
+                    def result = sh(
+                        script: 'git verify-commit HEAD 2>&1 || echo "UNSIGNED"',
+                        returnStdout: true
+                    ).trim()
+                    
+                    if (result.contains('UNSIGNED') || result.contains('BAD signature')) {
+                        echo """
+                        ========================================
+                        WARNING: Commit is not properly signed!
+                        ========================================
+                        
+                        For production deployments, all commits must be GPG signed.
+                        See docs/commit_signing_guide.md for setup instructions.
+                        
+                        Continuing for demo purposes...
+                        """
+                        // In production, you would fail here:
+                        // error('Unsigned commit detected!')
+                    } else {
+                        echo '✓ Commit signature verified'
+                    }
+                }
+            }
+        }
+        
         stage('Build TerraSign') {
             steps {
                 sh '''
