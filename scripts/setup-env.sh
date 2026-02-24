@@ -35,37 +35,52 @@ alias ts-inspect='terrasign admin inspect --service http://localhost:8081'
 alias ts-monitor='terrasign monitor --service http://localhost:8081'
 
 # Use function for lockdown to properly pass the on/off argument
+# SECURITY: lockdown on requires --gpg-key for identity verification
 ts-lockdown() {
     local mode="$1"
     shift
-    
-    if [ "$mode" = "off" ]; then
-        # For lockdown off, use default key path if not specified
-        if [[ ! "$@" =~ "--key" ]] && [[ ! "$@" =~ "--recovery-code" ]]; then
-            # Find project root by looking for go.mod
-            local current_dir="$PWD"
-            local project_root="$current_dir"
-            
-            while [ "$project_root" != "/" ]; do
-                if [ -f "$project_root/go.mod" ]; then
-                    break
-                fi
-                project_root="$(dirname "$project_root")"
-            done
-            
-            # If we didn't find go.mod, use current directory
-            if [ ! -f "$project_root/go.mod" ]; then
-                project_root="$current_dir"
-            fi
-            
-            local default_key="$project_root/examples/simple-app/admin.key"
-            terrasign lockdown off --service http://localhost:8081 --key "$default_key" "$@"
-        else
-            terrasign lockdown off --service http://localhost:8081 "$@"
+
+    if [ -z "$mode" ]; then
+        echo "Usage: ts-lockdown <on|off> [-k <gpg-key-id>] [-r \"<reason>\"]"
+        echo ""
+        echo "  on   : Activate emergency lockdown (requires -k <gpg-key-id>)"
+        echo "  off  : Lift lockdown  (requires -k <admin.key> or --recovery-code TERRASIGN-EMERGENCY)"
+        return 1
+    fi
+
+    if [ "$mode" = "on" ]; then
+        # SECURITY: key is MANDATORY for lockdown activation
+        if [[ ! "$*" =~ "-k" ]] && [[ ! "$*" =~ "--key" ]]; then
+            echo ""
+            echo "[ERROR] Lockdown activation requires your GPG key."
+            echo ""
+            echo "Usage: ts-lockdown on -k <gpg-key-id> -r \"<reason>\""
+            echo ""
+            echo "To find your key ID:"
+            echo "  gpg --list-secret-keys --keyid-format LONG"
+            echo ""
+            echo "Example:"
+            echo "  ts-lockdown on -k A1B2C3D4E5F6 -r \"Suspected breach\""
+            return 1
         fi
+        terrasign lockdown on --service http://localhost:8081 "$@"
+
+    elif [ "$mode" = "off" ]; then
+        # Allow key file OR recovery code for deactivation
+        if [[ ! "$*" =~ "-k" ]] && [[ ! "$*" =~ "--key" ]] && [[ ! "$*" =~ "--recovery-code" ]]; then
+            echo ""
+            echo "[ERROR] Lockdown deactivation requires authentication."
+            echo ""
+            echo "Options:"
+            echo "  ts-lockdown off -k <path/to/admin.key>"
+            echo "  ts-lockdown off --recovery-code TERRASIGN-EMERGENCY"
+            return 1
+        fi
+        terrasign lockdown off --service http://localhost:8081 "$@"
+
     else
-        # For lockdown on, no key required
-        terrasign lockdown "$mode" --service http://localhost:8081 "$@"
+        echo "[ERROR] Unknown mode: $mode. Must be 'on' or 'off'."
+        return 1
     fi
 }
 

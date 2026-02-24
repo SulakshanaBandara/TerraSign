@@ -55,3 +55,7 @@ cosign.pub
 tmp/
 temp/
 *.tmp
+
+# TerraSign runtime files
+LOCKDOWN_MODE
+terrasign-lockdown-audit.log

@@ -189,18 +189,30 @@ func (c *Client) UploadSignature(id, signaturePath string) error {
 	return nil
 }
 
-// SetLockdown enables or disables emergency lockdown
-func (c *Client) SetLockdown(enable bool) error {
+// SetLockdown enables or disables emergency lockdown.
+// identity, hostname, and reason are recorded in the server audit log.
+func (c *Client) SetLockdown(enable bool, identity, hostname, reason string) error {
 	status := "off"
 	if enable {
 		status = "on"
 	}
-	
-	resp, err := http.Post(
+
+	req, err := http.NewRequest(
+		"POST",
 		fmt.Sprintf("%s/lockdown?mode=%s", c.baseURL, status),
-		"application/json",
 		nil,
 	)
+	if err != nil {
+		return err
+	}
+
+	// Send GPG-verified identity so the server can record it
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Terrasign-Identity", identity)
+	req.Header.Set("X-Terrasign-Hostname", hostname)
+	req.Header.Set("X-Terrasign-Reason", reason)
+
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return err
 	}
