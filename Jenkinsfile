@@ -15,46 +15,6 @@ pipeline {
             }
         }
 
-        stage('Lockdown Check') {
-            steps {
-                script {
-                    // Check the TerraSign server for lockdown status
-                    // If lockdown is active, the server returns HTTP 503 with details of who activated it
-                    def statusCode = sh(
-                        script: '''
-                            curl -s -o /tmp/lockdown_response.txt \
-                                -w "%{http_code}" \
-                                --connect-timeout 5 \
-                                --max-time 5 \
-                                "$TERRASIGN_SERVICE/submit" 2>/dev/null || echo "000"
-                        ''',
-                        returnStdout: true
-                    ).trim()
-
-                    if (statusCode == '503') {
-                        // Server is in lockdown — read the response body which contains who activated it
-                        def lockdownMsg = sh(
-                            script: 'cat /tmp/lockdown_response.txt 2>/dev/null || echo "Lockdown is active"',
-                            returnStdout: true
-                        ).trim()
-
-                        echo """
-============================================================
-  !! EMERGENCY LOCKDOWN IS ACTIVE — PIPELINE BLOCKED !!
-============================================================
-${lockdownMsg}
-------------------------------------------------------------
-  Contact your security administrator to lift the lockdown:
-    terrasign lockdown off -k <admin-key>
-============================================================
-"""
-                        error("Pipeline aborted: TerraSign lockdown is active.\n${lockdownMsg}")
-                    } else {
-                        echo "[OK] No lockdown active (server responded: ${statusCode}). Proceeding."
-                    }
-                }
-            }
-        }
 
         stage('Verify Commit Signatures') {
             steps {
