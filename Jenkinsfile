@@ -81,10 +81,10 @@ pipeline {
                     script {
                         // Submit plan to signing service
                         def output = sh(
-                            script: '''
-                                export PATH=$PATH:$HOME/go/bin
-                                terrasign submit-for-review --service "$TERRASIGN_SERVICE" tfplan
-                            ''',
+                            script: """
+                                export PATH=\$PATH:\$HOME/go/bin
+                                terrasign submit-for-review --service ${TERRASIGN_SERVICE} tfplan
+                            """,
                             returnStdout: true
                         ).trim()
                         
@@ -110,9 +110,9 @@ pipeline {
         stage('Download Signature') {
             steps {
                 dir('examples/simple-app') {
-                    sh '''
-                        curl -o tfplan.sig "$TERRASIGN_SERVICE/download/$PLAN_ID/signature"
-                    '''
+                    sh """
+                        curl -o tfplan.sig ${TERRASIGN_SERVICE}/download/${env.PLAN_ID}/signature
+                    """
                 }
             }
         }
@@ -121,11 +121,11 @@ pipeline {
             steps {
                 dir('examples/simple-app') {
                     // Use terrasign wrapper to verify before applying
-                    sh '''
-                        export PATH=$PATH:$HOME/go/bin
+                    sh """
+                        export PATH=\$PATH:\$HOME/go/bin
                         # Use the admin public key from the workspace
                         terrasign wrap --key admin.pub -- apply tfplan
-                    '''
+                    """
                 }
             }
         }
