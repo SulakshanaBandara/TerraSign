@@ -35,6 +35,8 @@ func (s *SigningService) Start() error {
 	http.HandleFunc("/download/", s.checkLockdown(s.handleDownload))
 	http.HandleFunc("/list-pending", s.checkLockdown(s.handleListPending))
 	http.HandleFunc("/upload-signature/", s.checkLockdown(s.handleUploadSignature))
+	http.HandleFunc("/upload-bundle/", s.checkLockdown(s.handleUploadBundle))
+	http.HandleFunc("/reject/", s.checkLockdown(s.handleReject))
 	http.HandleFunc("/lockdown", s.handleLockdown) // No middleware for lockdown handler
 
 	addr := fmt.Sprintf(":%d", s.config.Port)
@@ -97,13 +99,13 @@ func (s *SigningService) handleDownload(w http.ResponseWriter, r *http.Request) 
 	// Format: /download/{id}/{file}
 	// Format: /download/{id}/{file}
 	path := r.URL.Path[len("/download/"):]
-	
+
 	parts := strings.Split(path, "/")
 	if len(parts) != 2 {
 		http.Error(w, "Invalid path", http.StatusBadRequest)
 		return
 	}
-	
+
 	id := parts[0]
 	fileType := parts[1]
 
@@ -118,6 +120,8 @@ func (s *SigningService) handleDownload(w http.ResponseWriter, r *http.Request) 
 		filePath = s.storage.GetPlanPath(id)
 	case "signature":
 		filePath = s.storage.GetSignaturePath(id)
+	case "bundle":
+		filePath = s.storage.GetBundlePath(id)
 	default:
 		http.Error(w, "Invalid file type", http.StatusBadRequest)
 		return
@@ -158,4 +162,59 @@ func (s *SigningService) MarkSigned(id, reviewer string) error {
 	submission.SignedAt = &now
 
 	return s.storage.UpdateSubmission(submission)
+}
+
+// handleReject handles admin rejection of a plan submission
+func (s *SigningService) handleReject(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract ID from path: /reject/{id}
+	id := r.URL.Path[len("/reject/"):]
+	if id == "" {
+		http.Error(w, "Missing submission ID", http.StatusBadRequest)
+		return
+	}
+
+	reason := r.URL.Query().Get("reason")
+	reviewer := r.URL.Query().Get("reviewer")
+	if reviewer == "" {
+		reviewer = "admin"
+	}
+	if reason == "" {
+		reason = "rejected by admin"
+	}
+
+	submission, err := s.storage.GetSubmission(id)
+	if err != nil {
+		http.Error(w, "Submission not found", http.StatusNotFound)
+		return
+	}
+
+	if submission.Status != "pending" {
+		http.Error(w, fmt.Sprintf("Submission is already %s", submission.Status), http.StatusConflict)
+		return
+	}
+
+	now := time.Now()
+	submission.Status = "rejected"
+	submission.ReviewedBy = reviewer
+	submission.ReviewedAt = &now
+	submission.RejectionReason = reason
+
+	if err := s.storage.UpdateSubmission(submission); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to update submission: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Printf("[REJECTED] Plan %s rejected by %s. Reason: %s\n", id, reviewer, reason)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"id":     id,
+		"status": "rejected",
+		"reason": reason,
+	})
 }

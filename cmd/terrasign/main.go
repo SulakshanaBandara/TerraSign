@@ -64,16 +64,30 @@ func printUsage() {
 func handleSign() {
 	signCmd := flag.NewFlagSet("sign", flag.ExitOnError)
 	keyPath := signCmd.String("key", "", "Path to private key (for key-based signing)")
-	
-	signCmd.Parse(os.Args[2:])
-	
-	if signCmd.NArg() < 1 {
+
+	var planFile string
+	var args []string
+	for i := 2; i < len(os.Args); i++ {
+		if !strings.HasPrefix(os.Args[i], "-") && planFile == "" { // Capture the first non-flag argument as planFile
+			planFile = os.Args[i]
+		} else {
+			args = append(args, os.Args[i])
+		}
+	}
+	signCmd.Parse(args)
+
+	// If planFile was not the first non-flag argument, it might be captured by flag.Arg(0)
+	if planFile == "" {
+		planFile = signCmd.Arg(0)
+	}
+
+	if planFile == "" {
 		fmt.Println("Usage: terrasign sign [flags] <plan-file>")
 		signCmd.PrintDefaults()
 		os.Exit(1)
 	}
-	
-	err := signer.Sign(signCmd.Arg(0), *keyPath)
+
+	err := signer.Sign(planFile, *keyPath)
 	if err != nil {
 		fmt.Printf("Error signing plan: %v\n", err)
 		os.Exit(1)
@@ -85,22 +99,36 @@ func handleVerify() {
 	identity := verifyCmd.String("identity", "", "The expected identity (email) in the certificate")
 	issuer := verifyCmd.String("issuer", "https://github.com/login/oauth", "The expected OIDC issuer (default: GitHub)")
 	keyPath := verifyCmd.String("key", "", "Path to public key (for key-based verification)")
-	
-	verifyCmd.Parse(os.Args[2:])
-	
-	if verifyCmd.NArg() < 1 {
+
+	var planFile string
+	var args []string
+	for i := 2; i < len(os.Args); i++ {
+		if !strings.HasPrefix(os.Args[i], "-") && planFile == "" { // Capture the first non-flag argument as planFile
+			planFile = os.Args[i]
+		} else {
+			args = append(args, os.Args[i])
+		}
+	}
+	verifyCmd.Parse(args)
+
+	// If planFile was not the first non-flag argument, it might be captured by flag.Arg(0)
+	if planFile == "" {
+		planFile = verifyCmd.Arg(0)
+	}
+
+	if planFile == "" {
 		fmt.Println("Usage: terrasign verify [flags] <plan-file>")
 		verifyCmd.PrintDefaults()
 		os.Exit(1)
 	}
-	
+
 	if *keyPath == "" && *identity == "" {
 		fmt.Println("Error: either --key or --identity flag is required for verification")
 		verifyCmd.PrintDefaults()
 		os.Exit(1)
 	}
 
-	err := verifier.Verify(verifyCmd.Arg(0), *keyPath, *identity, *issuer)
+	err := verifier.Verify(planFile, *keyPath, *identity, *issuer)
 	if err != nil {
 		fmt.Printf("Error verifying plan: %v\n", err)
 		os.Exit(1)
@@ -120,7 +148,7 @@ func handleWrap() {
 		fmt.Println("Usage: terrasign wrap [flags] -- <terraform args>")
 		os.Exit(1)
 	}
-	
+
 	err := terraform.Execute(terraformArgs, *keyPath, *identity, *issuer)
 	if err != nil {
 		fmt.Printf("Error executing terraform: %v\n", err)
@@ -186,7 +214,7 @@ func handleAdmin() {
 		fmt.Println("  sign <id>             Sign an approved plan")
 		fmt.Println("  reject <id>           Reject a plan submission")
 		fmt.Println("\nFlags:")
-		fmt.Println("  --service <url>       Signing service URL (default: http://localhost:8080)")
+		fmt.Println("  --service <url>       Signing service URL (default: http://localhost:8081)")
 		os.Exit(1)
 	}
 
@@ -194,7 +222,7 @@ func handleAdmin() {
 	// But `flag` package expects flags after the command.
 	// Since os.Args[2] is either the subcommand OR a flag, we need to handle this manually or structure differently.
 	// Let's use a simple approach: if os.Args[2] starts with "-", parses flags first.
-	
+
 	serviceURL := defaultServiceURL
 	args := os.Args[2:]
 
@@ -203,7 +231,7 @@ func handleAdmin() {
 		srv := fs.String("service", defaultServiceURL, "Service URL")
 		fs.Parse(args[1:])
 		serviceURL = *srv
-		
+
 		admin := NewAdminCommands(serviceURL)
 		if err := admin.ListPending(); err != nil {
 			fmt.Printf("Error: %v\n", err)
@@ -216,14 +244,14 @@ func handleAdmin() {
 	if args[0] == "inspect" {
 		fs := flag.NewFlagSet("inspect", flag.ExitOnError)
 		srv := fs.String("service", defaultServiceURL, "Service URL")
-		
+
 		// Parse to get service URL
 		for i, arg := range args {
 			if arg == "--service" && i+1 < len(args) {
 				serviceURL = args[i+1]
 			}
 		}
-		
+
 		// Get ID (first non-flag argument)
 		var id string
 		for _, arg := range args[1:] {
@@ -232,12 +260,12 @@ func handleAdmin() {
 				break
 			}
 		}
-		
+
 		if id == "" {
 			fmt.Println("Usage: terrasign admin inspect <submission-id> [--service <url>]")
 			os.Exit(1)
 		}
-		
+
 		admin := NewAdminCommands(serviceURL)
 		if err := admin.Inspect(id); err != nil {
 			fmt.Printf("Error: %v\n", err)
@@ -250,7 +278,7 @@ func handleAdmin() {
 	if args[0] == "download" {
 		fs := flag.NewFlagSet("download", flag.ExitOnError)
 		_ = fs.String("service", defaultServiceURL, "Service URL")
-		
+
 		// Let's manually scan for --service in args
 		for i, arg := range args {
 			if arg == "--service" && i+1 < len(args) {
@@ -277,7 +305,7 @@ func handleAdmin() {
 			fmt.Println("Usage: terrasign admin download <submission-id> [output-dir] [--service <url>]")
 			os.Exit(1)
 		}
-		
+
 		id := cmdArgs[0]
 		outputDir := "."
 		if len(cmdArgs) > 1 {
@@ -298,28 +326,28 @@ func handleAdmin() {
 		_ = fs.String("service", defaultServiceURL, "Service URL")
 		keyPath := fs.String("key", "", "Path to admin private key (required)")
 		reviewer := fs.String("reviewer", "admin", "Reviewer name")
-		
+
 		// terrasign admin sign <id> --key ... --service ...
 		// flags must be parsed. Since <id> is a positional arg, `flag` stops there.
 		// We have to parse flags from args ignoring the ID, or require ID last?
 		// Standard Go flag usage puts flags before positional args.
 		// terrasign admin sign --key ... --service ... <id>
-		
+
 		// Let's modify usage to be standard: flags then args
 		// But for backward compat/ease, let's manually parse --service again.
-		
+
 		for i, arg := range args {
 			if arg == "--service" && i+1 < len(args) {
 				serviceURL = args[i+1]
 			}
 		}
-		
+
 		// Now use flagset for the rest, but we have to filter out positional ID to let Parse work?
 		// Actually, let's just use manual parsing for everything here to be consistent with weird CLI structure
 		var id string
 		var key string
 		var rev = "admin"
-		
+
 		skipNext := false
 		for i, arg := range args[1:] {
 			if skipNext {
@@ -342,7 +370,7 @@ func handleAdmin() {
 			}
 			// If it looks like a flag but we didn't handle it
 			if strings.HasPrefix(arg, "-") {
-				continue 
+				continue
 			}
 			if id == "" {
 				id = arg
@@ -354,8 +382,8 @@ func handleAdmin() {
 			// Try to parse using flagset, hoping flags are before ID
 			fs.Parse(args[1:])
 			// We can't access srv since we ignored it earlier, but we can check if fs parsed anything
-			
-			// Actually, let's just rely on manual parsing being sufficient. 
+
+			// Actually, let's just rely on manual parsing being sufficient.
 			// If key is still empty, check if it was parsed by fs into *keyPath
 			if *keyPath != "" {
 				key = *keyPath
@@ -381,13 +409,67 @@ func handleAdmin() {
 		return
 	}
 
+	// Check reject
+	if args[0] == "reject" {
+		fs := flag.NewFlagSet("reject", flag.ExitOnError)
+		reason := fs.String("reason", "rejected by admin", "Rejection reason")
+		reviewer := fs.String("reviewer", "admin", "Reviewer name")
+
+		// Scan for --service
+		for i, arg := range args {
+			if arg == "--service" && i+1 < len(args) {
+				serviceURL = args[i+1]
+			}
+		}
+
+		// Get submission ID (first non-flag arg after "reject")
+		var id string
+		skipNext := false
+		for _, arg := range args[1:] {
+			if skipNext {
+				skipNext = false
+				continue
+			}
+			if arg == "--service" || arg == "--reason" || arg == "--reviewer" {
+				skipNext = true
+				continue
+			}
+			if strings.HasPrefix(arg, "-") {
+				continue
+			}
+			if id == "" {
+				id = arg
+			}
+		}
+
+		// Also try flagset parse in case user put flags before ID
+		if *reason == "rejected by admin" || *reviewer == "admin" {
+			fs.Parse(args[1:])
+			if fs.NArg() > 0 && id == "" {
+				id = fs.Arg(0)
+			}
+		}
+
+		if id == "" {
+			fmt.Println("Usage: terrasign admin reject <submission-id> [--reason <text>] [--reviewer <name>] [--service <url>]")
+			os.Exit(1)
+		}
+
+		admin := NewAdminCommands(serviceURL)
+		if err := admin.Reject(id, *reason, *reviewer); err != nil {
+			fmt.Printf("Error: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	fmt.Printf("Unknown admin subcommand: %s\n", args[0])
 	os.Exit(1)
 }
 
 func handleServer() {
 	serverCmd := flag.NewFlagSet("server", flag.ExitOnError)
-	port := serverCmd.Int("port", 8080, "Port to listen on")
+	port := serverCmd.Int("port", 8081, "Port to listen on")
 	storageDir := serverCmd.String("storage", "./terrasign-storage", "Storage directory for plans")
 
 	serverCmd.Parse(os.Args[2:])

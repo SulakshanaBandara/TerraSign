@@ -27,7 +27,7 @@ func NewStorage(baseDir string) (*Storage, error) {
 // StorePlan saves a plan file and creates a submission record
 func (s *Storage) StorePlan(planData io.Reader, submitter string) (*PlanSubmission, error) {
 	id := uuid.New().String()
-	
+
 	// Create directory for this submission
 	submissionDir := filepath.Join(s.baseDir, id)
 	if err := os.MkdirAll(submissionDir, 0755); err != nil {
@@ -48,10 +48,10 @@ func (s *Storage) StorePlan(planData io.Reader, submitter string) (*PlanSubmissi
 
 	// Create submission metadata
 	submission := &PlanSubmission{
-		ID:          id,
-		Submitter:   submitter,
-		CreatedAt:   time.Now(),
-		Status:      "pending",
+		ID:        id,
+		Submitter: submitter,
+		CreatedAt: time.Now(),
+		Status:    "pending",
 	}
 
 	// Save metadata
@@ -112,6 +112,11 @@ func (s *Storage) GetPlanPath(id string) string {
 // GetSignaturePath returns the path to the signature file
 func (s *Storage) GetSignaturePath(id string) string {
 	return filepath.Join(s.baseDir, id, "tfplan.sig")
+}
+
+// GetBundlePath returns the path to the cosign bundle file
+func (s *Storage) GetBundlePath(id string) string {
+	return filepath.Join(s.baseDir, id, "tfplan.bundle")
 }
 
 // UpdateSubmission updates submission metadata

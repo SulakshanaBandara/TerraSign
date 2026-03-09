@@ -5,12 +5,21 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
 
-const lockdownFile = "LOCKDOWN_MODE"
-const lockdownAuditLog = "terrasign-lockdown-audit.log"
+// lockdownFile returns the absolute path to the lockdown state file,
+// anchored to the storage directory so CWD changes never affect it.
+func (s *SigningService) lockdownFilePath() string {
+	return filepath.Join(s.config.StorageDir, "LOCKDOWN_MODE")
+}
+
+// lockdownAuditLogPath returns the absolute path to the server-side audit log.
+func (s *SigningService) lockdownAuditLogPath() string {
+	return filepath.Join(s.config.StorageDir, "terrasign-lockdown-audit.log")
+}
 
 // LockdownState holds info about the current lockdown
 type LockdownState struct {
@@ -22,8 +31,8 @@ type LockdownState struct {
 }
 
 // readLockdownState loads lockdown info from the state file
-func readLockdownState() *LockdownState {
-	data, err := os.ReadFile(lockdownFile)
+func (s *SigningService) readLockdownState() *LockdownState {
+	data, err := os.ReadFile(s.lockdownFilePath())
 	if err != nil {
 		return &LockdownState{Active: false}
 	}
@@ -71,11 +80,11 @@ func (s *SigningService) handleLockdown(w http.ResponseWriter, r *http.Request) 
 			Hostname:  hostname,
 		}
 		data, _ := json.MarshalIndent(state, "", "  ")
-		if err := os.WriteFile(lockdownFile, data, 0644); err != nil {
+		if err := os.WriteFile(s.lockdownFilePath(), data, 0644); err != nil {
 			http.Error(w, "Failed to enable lockdown", http.StatusInternalServerError)
 			return
 		}
-		writeServerAuditLog("LOCKDOWN_ACTIVATED", identity, hostname, reason, timestamp)
+		s.writeServerAuditLog("LOCKDOWN_ACTIVATED", identity, hostname, reason, timestamp)
 
 		banner := fmt.Sprintf(
 			"[EMERGENCY LOCKDOWN ACTIVATED]\nTime:     %s\nBy:       %s\nHost:     %s\nReason:   %s",
@@ -94,11 +103,11 @@ func (s *SigningService) handleLockdown(w http.ResponseWriter, r *http.Request) 
 			"reason":    reason,
 		})
 	} else {
-		if err := os.Remove(lockdownFile); err != nil && !os.IsNotExist(err) {
+		if err := os.Remove(s.lockdownFilePath()); err != nil && !os.IsNotExist(err) {
 			http.Error(w, "Failed to disable lockdown", http.StatusInternalServerError)
 			return
 		}
-		writeServerAuditLog("LOCKDOWN_DEACTIVATED", identity, hostname, reason, timestamp)
+		s.writeServerAuditLog("LOCKDOWN_DEACTIVATED", identity, hostname, reason, timestamp)
 
 		fmt.Printf("[LOCKDOWN LIFTED] By: %s at %s\n", identity, timestamp)
 
@@ -114,7 +123,7 @@ func (s *SigningService) handleLockdown(w http.ResponseWriter, r *http.Request) 
 
 // isLockdown checks if lockdown is active
 func (s *SigningService) isLockdown() bool {
-	_, err := os.Stat(lockdownFile)
+	_, err := os.Stat(s.lockdownFilePath())
 	return err == nil
 }
 
@@ -128,7 +137,7 @@ func (s *SigningService) checkLockdown(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if s.isLockdown() {
-			state := readLockdownState()
+			state := s.readLockdownState()
 			msg := fmt.Sprintf(
 				"EMERGENCY LOCKDOWN ACTIVE - ALL REQUESTS REJECTED\nActivated by: %s\nTime: %s\nReason: %s",
 				state.Identity, state.Timestamp, state.Reason,
@@ -142,8 +151,8 @@ func (s *SigningService) checkLockdown(next http.HandlerFunc) http.HandlerFunc {
 }
 
 // writeServerAuditLog appends an entry to the server-side audit log
-func writeServerAuditLog(action, identity, hostname, reason, timestamp string) {
-	f, err := os.OpenFile(lockdownAuditLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+func (s *SigningService) writeServerAuditLog(action, identity, hostname, reason, timestamp string) {
+	f, err := os.OpenFile(s.lockdownAuditLogPath(), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		fmt.Printf("[WARN] Could not write server audit log: %v\n", err)
 		return

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/sulakshanakarunarathne/terrasign/pkg/policy"
@@ -52,7 +53,7 @@ func SignWithOptions(planPath, keyPath string, skipPolicy bool) error {
 	if os.Getenv("JENKINS_URL") != "" {
 		builderID = os.Getenv("JENKINS_URL")
 	}
-	
+
 	provenanceGen := provenance.NewProvenanceGenerator(builderID)
 	buildStartTime := time.Now().Add(-5 * time.Minute) // Approximate
 	slsaProvenance, err := provenanceGen.Generate(planPath, buildStartTime)
@@ -74,13 +75,11 @@ func SignWithOptions(planPath, keyPath string, skipPolicy bool) error {
 	}
 
 	// Construct the cosign command
-	// We must use --bundle to avoid interactive prompts or config errors.
-	// We will extract the signature from the bundle afterwards.
+	// We MUST generate a bundle because cosign v3.x verify-blob requires it
+	// to avoid ASN.1 / IEEE P1363 encoding errors with this specific key.
 	bundleFile := planPath + ".bundle"
 	sigFile := planPath + ".sig"
 
-	// Minimal args to generate bundle without Tlog upload (for key-based)
-	// Note: --tlog-upload=false might require bundle in recent versions
 	args := []string{"sign-blob", "--yes",
 		"--bundle", bundleFile,
 		"--tlog-upload=false",
@@ -96,11 +95,26 @@ func SignWithOptions(planPath, keyPath string, skipPolicy bool) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
+	// Pass through COSIGN_PASSWORD to avoid interactive prompt
+	// Default to empty string for demo keys if not set
+	env := os.Environ()
+	hasPass := false
+	for _, e := range env {
+		if strings.HasPrefix(e, "COSIGN_PASSWORD=") {
+			hasPass = true
+			break
+		}
+	}
+	if !hasPass {
+		env = append(env, "COSIGN_PASSWORD=")
+	}
+	cmd.Env = env
+
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("cosign signing failed: %w", err)
 	}
 
-	// Extract signature from bundle
+	// Extract signature from bundle (server upload endpoint expects raw file)
 	if err := extractSignatureFromBundle(bundleFile, sigFile); err != nil {
 		return fmt.Errorf("failed to extract signature from bundle: %w", err)
 	}

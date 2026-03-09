@@ -59,6 +59,39 @@ pipeline {
             }
         }
         
+        stage('Discover Service') {
+            steps {
+                script {
+                    def candidateUrls = [
+                        env.TERRASIGN_SERVICE,
+                        "http://host.docker.internal:8081",
+                        "http://172.17.0.1:8081",
+                        "http://localhost:8081"
+                    ]
+                    
+                    env.REACHABLE_SERVICE = ""
+                    for (url in candidateUrls) {
+                        try {
+                            echo "Testing connection to ${url}..."
+                            // Try calling list-pending which should return 200 or 403 (if lockdown active)
+                            def status = sh(script: "curl -s -o /dev/null -w '%{http_code}' --connect-timeout 2 ${url}/list-pending || true", returnStdout: true).trim()
+                            if (status == '200' || status == '403') {
+                                env.REACHABLE_SERVICE = url
+                                echo "Success! Reached server at ${url}"
+                                break
+                            }
+                        } catch (Exception e) {
+                            echo "Failed: ${e.getMessage()}"
+                        }
+                    }
+                    
+                    if (env.REACHABLE_SERVICE == "") {
+                        error("Could not reach TerraSign service on any candidate URLs. Ensure the server is running on the host machine.")
+                    }
+                }
+            }
+        }
+        
         stage('Terraform Init') {
             steps {
                 dir('examples/simple-app') {
@@ -83,7 +116,7 @@ pipeline {
                         def output = sh(
                             script: """
                                 export PATH=\$PATH:\$HOME/go/bin
-                                terrasign submit-for-review --service ${TERRASIGN_SERVICE} tfplan
+                                terrasign submit-for-review --service ${REACHABLE_SERVICE} tfplan
                             """,
                             returnStdout: true
                         ).trim()
@@ -107,11 +140,15 @@ pipeline {
             }
         }
         
-        stage('Download Signature') {
+        stage('Download Signature Bundle') {
             steps {
                 dir('examples/simple-app') {
                     sh """
-                        curl -o tfplan.sig ${TERRASIGN_SERVICE}/download/${env.PLAN_ID}/signature
+                        # Download the full cosign bundle which contains the ECDSA signature
+                        curl -sSL -o tfplan.bundle ${REACHABLE_SERVICE}/download/${env.PLAN_ID}/bundle || true
+                        
+                        # Also download legacy signature as fallback
+                        curl -sSL -o tfplan.sig ${REACHABLE_SERVICE}/download/${env.PLAN_ID}/signature || true
                     """
                 }
             }
@@ -123,8 +160,8 @@ pipeline {
                     // Use terrasign wrapper to verify before applying
                     sh """
                         export PATH=\$PATH:\$HOME/go/bin
-                        # Use the admin public key from the workspace
-                        terrasign wrap --key admin.pub -- apply tfplan
+                        # Use the admin public key injected via Jenkins credential
+                        terrasign wrap --key ${ADMIN_PUBLIC_KEY} -- apply tfplan
                     """
                 }
             }

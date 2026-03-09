@@ -62,16 +62,16 @@ func Verify(planPath, keyPath, identity, issuer string) error {
 
 // verifyCosignSignature verifies the cryptographic signature
 func verifyCosignSignature(planPath, keyPath, identity, issuer string) error {
-	sigFile := planPath + ".sig"
+	bundleFile := planPath + ".bundle"
 	certFile := planPath + ".crt"
 
 	// Basic check if files exist
-	if _, err := os.Stat(sigFile); os.IsNotExist(err) {
-		return fmt.Errorf("signature file not found: %s", sigFile)
+	if _, err := os.Stat(bundleFile); os.IsNotExist(err) {
+		return fmt.Errorf("bundle file not found: %s", bundleFile)
 	}
 
 	args := []string{"verify-blob",
-		"--signature", sigFile,
+		"--bundle", bundleFile,
 	}
 
 	if keyPath != "" {

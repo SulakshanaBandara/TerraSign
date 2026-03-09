@@ -22,20 +22,20 @@ func handleMonitor() {
 
 	client := remote.NewClient(serviceURL)
 	admin := NewAdminCommands(serviceURL)
-	
+
 	// Interactive mode
 	scanner := bufio.NewScanner(os.Stdin)
-	
+
 	for {
 		// Clear screen and show pending plans
 		fmt.Print("\033[H\033[2J")
-		
+
 		fmt.Println("=================================================================================")
 		fmt.Println("                   TERRASIGN INTERACTIVE DASHBOARD                              ")
 		fmt.Println("=================================================================================")
 		fmt.Printf("Service: %s   |   Time: %s\n", serviceURL, time.Now().Format("15:04:05"))
 		fmt.Println("---------------------------------------------------------------------------------")
-		
+
 		pending, err := client.ListPending()
 		if err != nil {
 			fmt.Printf("Error fetching data: %v\n", err)
@@ -46,28 +46,28 @@ func handleMonitor() {
 				w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 				fmt.Fprintln(w, "\nID\tSUBMITTER\tCREATED AT\tSTATUS")
 				fmt.Fprintln(w, "--\t---------\t----------\t------")
-				
+
 				for _, p := range pending {
-					fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", 
-						p.ID, 
-						p.Submitter, 
-						p.CreatedAt.Format("15:04:05"), 
+					fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
+						p.ID,
+						p.Submitter,
+						p.CreatedAt.Format("15:04:05"),
 						p.Status)
 				}
 				w.Flush()
 			}
 		}
-		
+
 		fmt.Println("\n---------------------------------------------------------------------------------")
 		fmt.Println("Actions: [i]nspect | [s]ign | [r]efresh | [q]uit")
 		fmt.Print("Enter action: ")
-		
+
 		if !scanner.Scan() {
 			break
 		}
-		
+
 		action := strings.TrimSpace(strings.ToLower(scanner.Text()))
-		
+
 		switch action {
 		case "i", "inspect":
 			fmt.Print("Enter submission ID: ")
@@ -83,14 +83,14 @@ func handleMonitor() {
 				fmt.Print("\nPress Enter to continue...")
 				scanner.Scan()
 			}
-			
+
 		case "s", "sign":
 			fmt.Print("Enter submission ID: ")
 			if !scanner.Scan() {
 				continue
 			}
 			id := strings.TrimSpace(scanner.Text())
-			
+
 			// Find project root to construct absolute path
 			cwd, _ := os.Getwd()
 			projectRoot := cwd
@@ -105,20 +105,20 @@ func handleMonitor() {
 				}
 				projectRoot = parent
 			}
-			
+
 			defaultKeyPath := filepath.Join(projectRoot, "examples", "simple-app", "admin.key")
-			
+
 			fmt.Printf("\nDefault key path: %s\n", defaultKeyPath)
 			fmt.Println("Options:")
 			fmt.Println("  [1] Use default path")
 			fmt.Println("  [2] Enter custom path")
 			fmt.Print("Choose option (1 or 2): ")
-			
+
 			if !scanner.Scan() {
 				continue
 			}
 			choice := strings.TrimSpace(scanner.Text())
-			
+
 			var keyPath string
 			if choice == "2" {
 				fmt.Print("Enter custom key path: ")
@@ -135,25 +135,34 @@ func handleMonitor() {
 			} else {
 				keyPath = defaultKeyPath
 			}
-			
+
 			if id != "" {
+				// We MUST change directory to the simple-app directory so that the downloaded
+				// .sig and .bundle files land where ts-verify expects them.
+				targetDir := filepath.Join(projectRoot, "examples", "simple-app")
+				os.Chdir(targetDir)
+
 				if err := admin.Sign(id, keyPath, "admin"); err != nil {
 					fmt.Printf("Error: %v\n", err)
 				} else {
 					fmt.Println("[OK] Plan signed successfully")
 				}
+
+				// Change back to original directory just in case
+				os.Chdir(cwd)
+
 				fmt.Print("\nPress Enter to continue...")
 				scanner.Scan()
 			}
-			
+
 		case "r", "refresh":
 			// Just loop again
 			continue
-			
+
 		case "q", "quit":
 			fmt.Println("Exiting dashboard...")
 			return
-			
+
 		default:
 			fmt.Println("Invalid action. Press Enter to continue...")
 			scanner.Scan()

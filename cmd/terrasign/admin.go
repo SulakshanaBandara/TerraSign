@@ -71,7 +71,7 @@ func (a *AdminCommands) Inspect(id string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get working directory: %w", err)
 	}
-	
+
 	// Try to find the project root by looking for go.mod
 	projectRoot := cwd
 	for {
@@ -86,14 +86,14 @@ func (a *AdminCommands) Inspect(id string) error {
 		}
 		projectRoot = parent
 	}
-	
+
 	// Use a dummy directory for terraform show if a specific one isn't needed for the command itself
 	// The original code used `terraformDir` for `cmd.Dir`.
 	// The new code snippet implies `cmd.Dir = tfDir` but `tfDir` is not defined.
 	// To maintain functionality and syntactic correctness, we'll keep the `terraformDir` calculation
 	// and use it for `cmd.Dir`.
 	terraformDir := filepath.Join(projectRoot, "examples", "simple-app")
-	
+
 	// Run terraform show
 	cmd := exec.Command("terraform", "show", planPath)
 	cmd.Dir = terraformDir // Keep the original working directory for terraform command
@@ -108,7 +108,7 @@ func (a *AdminCommands) Inspect(id string) error {
 		}
 		return fmt.Errorf("failed to show plan: %w\nOutput: %s", err, output)
 	}
-	
+
 	fmt.Println(string(output))
 	return nil
 }
@@ -156,24 +156,55 @@ func (a *AdminCommands) Sign(id, keyPath, reviewer string) error {
 		return fmt.Errorf("failed to sign plan: %w", err)
 	}
 
-	// Upload the signature
+	// Upload the signature to the server
 	sigPath := planPath + ".sig"
 	if err := a.client.UploadSignature(id, sigPath); err != nil {
 		return fmt.Errorf("failed to upload signature: %w", err)
 	}
 
-	fmt.Printf("Plan %s signed successfully by %s\n", id, reviewer)
+	// Upload the bundle to the server
+	bundlePath := planPath + ".bundle"
+	if err := a.client.UploadBundle(id, bundlePath); err != nil {
+		// Log but don't fail, to remain backward compatible
+		fmt.Printf("[WARN] Could not upload bundle to server: %v\n", err)
+	}
+
+	// Also download the signature to the current working directory
+	// so ts-verify / terrasign wrap can find it immediately
+	localSigPath := "tfplan.sig"
+	if err := a.client.DownloadSignature(id, localSigPath); err != nil {
+		fmt.Printf("[WARN] Could not download sig locally: %v\n", err)
+		fmt.Printf("  Download it manually:\n")
+		fmt.Printf("  curl -o tfplan.sig %s/download/%s/signature\n", a.client.BaseURL(), id)
+	} else {
+		fmt.Printf("Signature saved to: %s\n", localSigPath)
+	}
+
+	// Also copy the provenance and bundle to cwd if they exist
+	for _, suffix := range []string{".provenance", ".bundle"} {
+		src := planPath + suffix
+		if _, err := os.Stat(src); err == nil {
+			data, err := os.ReadFile(src)
+			if err == nil {
+				_ = os.WriteFile("tfplan"+suffix, data, 0644)
+			}
+		}
+	}
+
+	fmt.Printf("\nPlan %s signed successfully by %s\n", id, reviewer)
+	fmt.Println("Run 'ts-verify apply tfplan' to apply the verified plan.")
 	return nil
 }
 
 // Reject rejects a plan submission
-func (a *AdminCommands) Reject(id, reason string) error {
+func (a *AdminCommands) Reject(id, reason, reviewer string) error {
 	fmt.Printf("Rejecting plan %s...\n", id)
-	fmt.Printf("Reason: %s\n", reason)
-	
-	// In a full implementation, this would call an API endpoint
-	// For now, we just print the message
-	fmt.Println("Note: Rejection functionality requires server-side implementation")
-	
+	fmt.Printf("Reviewer: %s\nReason:   %s\n", reviewer, reason)
+
+	if err := a.client.RejectSubmission(id, reviewer, reason); err != nil {
+		return fmt.Errorf("failed to reject submission: %w", err)
+	}
+
+	fmt.Printf("\n[OK] Plan %s has been rejected.\n", id)
 	return nil
 }

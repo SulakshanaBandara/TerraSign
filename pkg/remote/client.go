@@ -24,6 +24,11 @@ func NewClient(baseURL string) *Client {
 	}
 }
 
+// BaseURL returns the service base URL
+func (c *Client) BaseURL() string {
+	return c.baseURL
+}
+
 // SubmitPlan submits a plan for review
 func (c *Client) SubmitPlan(planPath, submitter string) (string, error) {
 	file, err := os.Open(planPath)
@@ -114,6 +119,11 @@ func (c *Client) DownloadSignature(id, outputPath string) error {
 	return c.downloadFile(id, "signature", outputPath)
 }
 
+// DownloadBundle downloads the cosign bundle file
+func (c *Client) DownloadBundle(id, outputPath string) error {
+	return c.downloadFile(id, "bundle", outputPath)
+}
+
 // downloadFile downloads a file from the service
 func (c *Client) downloadFile(id, fileType, outputPath string) error {
 	url := fmt.Sprintf("%s/download/%s/%s", c.baseURL, id, fileType)
@@ -189,6 +199,39 @@ func (c *Client) UploadSignature(id, signaturePath string) error {
 	return nil
 }
 
+// UploadBundle uploads a cosign bundle file for a submission
+func (c *Client) UploadBundle(id, bundlePath string) error {
+	file, err := os.Open(bundlePath)
+	if err != nil {
+		return fmt.Errorf("failed to open bundle file: %w", err)
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return fmt.Errorf("failed to read bundle: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/upload-bundle/%s", c.baseURL, id)
+	req, err := http.NewRequest("POST", url, bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to upload bundle: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("server error: %s", string(body))
+	}
+
+	return nil
+}
+
 // SetLockdown enables or disables emergency lockdown.
 // identity, hostname, and reason are recorded in the server audit log.
 func (c *Client) SetLockdown(enable bool, identity, hostname, reason string) error {
@@ -221,6 +264,28 @@ func (c *Client) SetLockdown(enable bool, identity, hostname, reason string) err
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("server returned error: %s", string(body))
+	}
+
+	return nil
+}
+
+// RejectSubmission rejects a pending plan submission
+func (c *Client) RejectSubmission(id, reviewer, reason string) error {
+	url := fmt.Sprintf("%s/reject/%s?reviewer=%s&reason=%s", c.baseURL, id, reviewer, reason)
+	req, err := http.NewRequest("POST", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to reject submission: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("server error: %s", string(body))
 	}
 
 	return nil
