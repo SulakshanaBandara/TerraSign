@@ -158,11 +158,15 @@ pipeline {
             steps {
                 dir('examples/simple-app') {
                     // Use terrasign wrapper to verify before applying
-                    sh """
-                        export PATH=\$PATH:\$HOME/go/bin
-                        # Use the admin public key injected via Jenkins credential
-                        terrasign wrap --key ${ADMIN_PUBLIC_KEY} -- apply tfplan
-                    """
+                    sh '''
+                        export PATH=$PATH:$HOME/go/bin
+                        
+                        # The ADMIN_PUBLIC_KEY credential is injected as a raw string. 
+                        # We must write it to a file first because terrasign wrap expects a file path.
+                        echo "$ADMIN_PUBLIC_KEY" > jenkins-admin-ui.pub
+                        
+                        terrasign wrap --key jenkins-admin-ui.pub -- apply tfplan
+                    '''
                 }
             }
         }
