@@ -158,15 +158,17 @@ pipeline {
             steps {
                 dir('examples/simple-app') {
                     // Use terrasign wrapper to verify before applying
-                    sh '''
-                        export PATH=$PATH:$HOME/go/bin
+                    script {
+                        // Securely write the multiline PEM string directly from the Groovy environment.
+                        // This preserves newlines and avoids bash expansion flattening the PEM string
+                        // which previously caused the "PEM decoding failed" error.
+                        writeFile file: 'jenkins-admin-ui.pub', text: env.ADMIN_PUBLIC_KEY
                         
-                        # The ADMIN_PUBLIC_KEY credential is injected as a raw string. 
-                        # We must write it to a file first because terrasign wrap expects a file path.
-                        echo "$ADMIN_PUBLIC_KEY" > jenkins-admin-ui.pub
-                        
-                        terrasign wrap --key jenkins-admin-ui.pub -- apply tfplan
-                    '''
+                        sh '''
+                            export PATH=$PATH:$HOME/go/bin
+                            terrasign wrap --key jenkins-admin-ui.pub -- apply tfplan
+                        '''
+                    }
                 }
             }
         }
