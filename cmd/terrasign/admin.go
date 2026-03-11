@@ -172,14 +172,14 @@ func (a *AdminCommands) Sign(id, keyPath, reviewer string) error {
 
 	// Fetch and display updated approval status
 	if sub, err := a.client.GetApprovals(id); err == nil {
-		fmt.Printf("\n🔐 Approval Status: %s approvals received\n", sub.ApprovalCount())
+		fmt.Printf("\n[APPROVAL STATUS] %s approvals received\n", sub.ApprovalCount())
 		for _, approval := range sub.Approvals {
-			fmt.Printf("   ✓ %s (at %s)\n", approval.Reviewer, approval.ApprovedAt.Format("15:04:05"))
+			fmt.Printf("   [OK] %s (at %s)\n", approval.Reviewer, approval.ApprovedAt.Format("15:04:05"))
 		}
 		if sub.IsFullyApproved() {
-			fmt.Printf("\n✅ PLAN FULLY APPROVED! Ready for ts-verify apply.\n")
+			fmt.Printf("\n[APPROVED] Plan fully approved. Ready for ts-verify apply.\n")
 		} else {
-			fmt.Printf("\n⏳ Waiting for %d more approval(s) before plan can be applied.\n",
+			fmt.Printf("\n[PENDING] Waiting for %d more approval(s) before plan can be applied.\n",
 				sub.ApprovalThreshold-len(sub.Approvals))
 		}
 	}

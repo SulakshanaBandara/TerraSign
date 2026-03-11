@@ -59,7 +59,7 @@ func handleMonitor() {
 					if p.Status == "pending" && p.ApprovalThreshold > 1 {
 						status = fmt.Sprintf("pending (%s approvals)", p.ApprovalCount())
 					} else if p.Status == "approved" {
-						status = fmt.Sprintf("✅ approved (%s)", p.ApprovalCount())
+						status = fmt.Sprintf("[approved] (%s)", p.ApprovalCount())
 					}
 					fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
 						p.ID,
@@ -220,7 +220,7 @@ func handleMonitor() {
 			if _, err := client.SetPolicy(newThresh, policyAdmin, reason); err != nil {
 				fmt.Printf("Error setting policy: %v\n", err)
 			} else {
-				fmt.Printf("\n✅ Policy updated: all new plans now require %d approval(s).\n", newThresh)
+				fmt.Printf("\n[OK] Policy updated: all new plans now require %d approval(s).\n", newThresh)
 			}
 			fmt.Print("Press Enter to continue...")
 			scanner.Scan()
