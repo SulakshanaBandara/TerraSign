@@ -39,11 +39,18 @@ func (s *SigningService) Start() error {
 	http.HandleFunc("/upload-signature/", s.checkLockdown(s.handleUploadSignature))
 	http.HandleFunc("/upload-bundle/", s.checkLockdown(s.handleUploadBundle))
 	http.HandleFunc("/reject/", s.checkLockdown(s.handleReject))
+	http.HandleFunc("/policy", s.handlePolicy)     // Admin-only: get/set global approval policy
 	http.HandleFunc("/lockdown", s.handleLockdown) // No middleware for lockdown handler
 
 	addr := fmt.Sprintf(":%d", s.config.Port)
 	fmt.Printf("Starting signing service on %s\n", addr)
 	fmt.Printf("Storage directory: %s\n", s.config.StorageDir)
+
+	// Print current policy at startup
+	if policy, err := s.storage.GetGlobalPolicy(); err == nil {
+		fmt.Printf("Global approval threshold: %d\n", policy.ApprovalThreshold)
+	}
+
 	return http.ListenAndServe(addr, nil)
 }
 
@@ -63,20 +70,29 @@ func (s *SigningService) handleSubmit(w http.ResponseWriter, r *http.Request) {
 		submitter = "unknown"
 	}
 
-	// Get approval threshold (default 1 for backward compat, use 2 for multi-party)
-	threshold := 1
+	// Always use global server policy as the approval threshold.
+	// Clients cannot lower the requirement; they can only request a higher one.
+	policy, err := s.storage.GetGlobalPolicy()
+	if err != nil {
+		policy = &GlobalPolicy{ApprovalThreshold: 1}
+	}
+	threshold := policy.ApprovalThreshold
+
+	// Allow caller to request a higher threshold only (cannot downgrade policy)
 	if t := r.URL.Query().Get("threshold"); t != "" {
-		if n, err := strconv.Atoi(t); err == nil && n >= 1 {
+		if n, err2 := strconv.Atoi(t); err2 == nil && n > threshold {
 			threshold = n
 		}
 	}
 
 	// Store the plan
-	submission, err := s.storage.StorePlan(r.Body, submitter, threshold)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to store plan: %v", err), http.StatusInternalServerError)
+	submission, err2 := s.storage.StorePlan(r.Body, submitter, threshold)
+	if err2 != nil {
+		http.Error(w, fmt.Sprintf("Failed to store plan: %v", err2), http.StatusInternalServerError)
 		return
 	}
+
+	fmt.Printf("[SUBMIT] Plan from %s — requires %d approval(s) (global policy)\n", submitter, threshold)
 
 	// Return submission ID
 	w.Header().Set("Content-Type", "application/json")
@@ -85,6 +101,53 @@ func (s *SigningService) handleSubmit(w http.ResponseWriter, r *http.Request) {
 		"status":             submission.Status,
 		"approval_threshold": submission.ApprovalThreshold,
 	})
+}
+
+// handlePolicy handles GET (read) and POST (set) for the global approval policy
+func (s *SigningService) handlePolicy(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		policy, err := s.storage.GetGlobalPolicy()
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to read policy: %v", err), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(policy)
+
+	case http.MethodPost:
+		var req struct {
+			Threshold int    `json:"threshold"`
+			SetBy     string `json:"set_by"`
+			Reason    string `json:"reason"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, fmt.Sprintf("Invalid request: %v", err), http.StatusBadRequest)
+			return
+		}
+		if req.Threshold < 1 {
+			http.Error(w, "threshold must be >= 1", http.StatusBadRequest)
+			return
+		}
+		if req.SetBy == "" {
+			req.SetBy = "admin"
+		}
+		newPolicy := &GlobalPolicy{
+			ApprovalThreshold: req.Threshold,
+			SetBy:             req.SetBy,
+			SetAt:             time.Now().Format(time.RFC3339),
+			Reason:            req.Reason,
+		}
+		if err := s.storage.SetGlobalPolicy(newPolicy); err != nil {
+			http.Error(w, fmt.Sprintf("Failed to set policy: %v", err), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(newPolicy)
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 // handleStatus returns the status of a submission

@@ -199,3 +199,52 @@ func (s *Storage) saveMetadata(submission *PlanSubmission) error {
 
 	return nil
 }
+
+// GlobalPolicy holds server-wide approval policy
+type GlobalPolicy struct {
+	ApprovalThreshold int    `json:"approval_threshold"` // 0 means not set (use per-submission default)
+	SetBy             string `json:"set_by,omitempty"`
+	SetAt             string `json:"set_at,omitempty"`
+	Reason            string `json:"reason,omitempty"`
+}
+
+// policyPath returns the path to the global policy file
+func (s *Storage) policyPath() string {
+	return filepath.Join(s.baseDir, "policy.json")
+}
+
+// GetGlobalPolicy returns the current global approval policy
+func (s *Storage) GetGlobalPolicy() (*GlobalPolicy, error) {
+	data, err := os.ReadFile(s.policyPath())
+	if os.IsNotExist(err) {
+		return &GlobalPolicy{ApprovalThreshold: 1}, nil // default: 1 approval
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to read policy: %w", err)
+	}
+	var policy GlobalPolicy
+	if err := json.Unmarshal(data, &policy); err != nil {
+		return nil, fmt.Errorf("failed to parse policy: %w", err)
+	}
+	if policy.ApprovalThreshold < 1 {
+		policy.ApprovalThreshold = 1
+	}
+	return &policy, nil
+}
+
+// SetGlobalPolicy persists a new global approval policy
+func (s *Storage) SetGlobalPolicy(policy *GlobalPolicy) error {
+	if policy.ApprovalThreshold < 1 {
+		policy.ApprovalThreshold = 1
+	}
+	data, err := json.MarshalIndent(policy, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal policy: %w", err)
+	}
+	if err := os.WriteFile(s.policyPath(), data, 0644); err != nil {
+		return fmt.Errorf("failed to write policy: %w", err)
+	}
+	fmt.Printf("[POLICY] Global approval threshold set to %d by %s\n",
+		policy.ApprovalThreshold, policy.SetBy)
+	return nil
+}

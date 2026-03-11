@@ -316,3 +316,47 @@ func (c *Client) RejectSubmission(id, reviewer, reason string) error {
 
 	return nil
 }
+
+// GetPolicy retrieves the current global approval threshold policy from the server
+func (c *Client) GetPolicy() (*GlobalPolicy, error) {
+	resp, err := c.client.Get(c.baseURL + "/policy")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get policy: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("server returned %d", resp.StatusCode)
+	}
+
+	var policy GlobalPolicy
+	if err := json.NewDecoder(resp.Body).Decode(&policy); err != nil {
+		return nil, fmt.Errorf("failed to parse policy: %w", err)
+	}
+	return &policy, nil
+}
+
+// SetPolicy updates the server-wide approval threshold policy
+func (c *Client) SetPolicy(threshold int, setBy, reason string) (*GlobalPolicy, error) {
+	body, _ := json.Marshal(map[string]interface{}{
+		"threshold": threshold,
+		"set_by":    setBy,
+		"reason":    reason,
+	})
+	resp, err := c.client.Post(c.baseURL+"/policy", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to set policy: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		errBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("server error: %s", string(errBody))
+	}
+
+	var policy GlobalPolicy
+	if err := json.NewDecoder(resp.Body).Decode(&policy); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+	return &policy, nil
+}

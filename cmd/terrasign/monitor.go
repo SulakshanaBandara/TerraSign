@@ -34,6 +34,13 @@ func handleMonitor() {
 		fmt.Println("                   TERRASIGN INTERACTIVE DASHBOARD                              ")
 		fmt.Println("=================================================================================")
 		fmt.Printf("Service: %s   |   Time: %s\n", serviceURL, time.Now().Format("15:04:05"))
+		if policy, err2 := client.GetPolicy(); err2 == nil {
+			setBy := policy.SetBy
+			if setBy == "" {
+				setBy = "default"
+			}
+			fmt.Printf("Policy: Requires %d approval(s)   |   Set by: %s\n", policy.ApprovalThreshold, setBy)
+		}
 		fmt.Println("---------------------------------------------------------------------------------")
 
 		pending, err := client.ListPending()
@@ -65,7 +72,7 @@ func handleMonitor() {
 		}
 
 		fmt.Println("\n---------------------------------------------------------------------------------")
-		fmt.Println("Actions: [i]nspect | [s]ign | [r]efresh | [q]uit")
+		fmt.Println("Actions: [i]nspect | [s]ign | [p]olicy | [r]efresh | [q]uit")
 		fmt.Print("Enter action: ")
 
 		if !scanner.Scan() {
@@ -143,12 +150,22 @@ func handleMonitor() {
 			}
 
 			if id != "" {
+				// Ask for reviewer name to track who signed
+				fmt.Print("Enter your name/ID for audit (e.g. alice): ")
+				var reviewer string
+				if scanner.Scan() {
+					reviewer = strings.TrimSpace(scanner.Text())
+				}
+				if reviewer == "" {
+					reviewer = "admin"
+				}
+
 				// We MUST change directory to the simple-app directory so that the downloaded
 				// .sig and .bundle files land where ts-verify expects them.
 				targetDir := filepath.Join(projectRoot, "examples", "simple-app")
 				os.Chdir(targetDir)
 
-				if err := admin.Sign(id, keyPath, "admin"); err != nil {
+				if err := admin.Sign(id, keyPath, reviewer); err != nil {
 					fmt.Printf("Error: %v\n", err)
 				} else {
 					fmt.Println("[OK] Plan signed successfully")
@@ -160,6 +177,53 @@ func handleMonitor() {
 				fmt.Print("\nPress Enter to continue...")
 				scanner.Scan()
 			}
+
+		case "p", "policy":
+			// Show current policy
+			if policy, err := client.GetPolicy(); err == nil {
+				fmt.Printf("\nCurrent global policy: %d approval(s) required\n", policy.ApprovalThreshold)
+				if policy.SetBy != "" {
+					fmt.Printf("Set by: %s at %s\n", policy.SetBy, policy.SetAt)
+				}
+				if policy.Reason != "" {
+					fmt.Printf("Reason: %s\n", policy.Reason)
+				}
+			}
+			fmt.Print("\nEnter new threshold (1-9, or Enter to keep current): ")
+			if !scanner.Scan() {
+				continue
+			}
+			newThreshStr := strings.TrimSpace(scanner.Text())
+			if newThreshStr == "" {
+				continue
+			}
+			var newThresh int
+			if _, err := fmt.Sscanf(newThreshStr, "%d", &newThresh); err != nil || newThresh < 1 {
+				fmt.Println("Invalid threshold. Must be a number >= 1.")
+				fmt.Print("Press Enter to continue...")
+				scanner.Scan()
+				continue
+			}
+			fmt.Print("Enter your name (for audit log): ")
+			var policyAdmin string
+			if scanner.Scan() {
+				policyAdmin = strings.TrimSpace(scanner.Text())
+			}
+			if policyAdmin == "" {
+				policyAdmin = "admin"
+			}
+			fmt.Print("Reason for change (optional): ")
+			var reason string
+			if scanner.Scan() {
+				reason = strings.TrimSpace(scanner.Text())
+			}
+			if _, err := client.SetPolicy(newThresh, policyAdmin, reason); err != nil {
+				fmt.Printf("Error setting policy: %v\n", err)
+			} else {
+				fmt.Printf("\n✅ Policy updated: all new plans now require %d approval(s).\n", newThresh)
+			}
+			fmt.Print("Press Enter to continue...")
+			scanner.Scan()
 
 		case "r", "refresh":
 			// Just loop again
