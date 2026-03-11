@@ -49,7 +49,8 @@ fi
 echo ""
 echo "[2/3] Starting TerraSign signing service on port $PORT..."
 mkdir -p "$STORAGE_DIR"
-"$HOME/go/bin/terrasign" server --port "$PORT" --storage "$STORAGE_DIR" &
+export TERRASIGN_TOKEN="demo-secret-token"
+"$HOME/go/bin/terrasign" server --port "$PORT" --storage "$STORAGE_DIR" --api-token "$TERRASIGN_TOKEN" &
 SERVER_PID=$!
 sleep 1
 

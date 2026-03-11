@@ -41,6 +41,8 @@ func (s *SigningService) handleUploadSignature(w http.ResponseWriter, r *http.Re
 		return
 	}
 	defer sigFile.Close()
+	// Limit request body to 10MB
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
 
 	if _, err := io.Copy(sigFile, r.Body); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to write signature: %v", err), http.StatusInternalServerError)
@@ -72,7 +74,7 @@ func (s *SigningService) handleUploadBundle(w http.ResponseWriter, r *http.Reque
 	// Get approver name from query param
 	approver := r.URL.Query().Get("approver")
 	if approver == "" {
-		approver = "admin"
+		approver = "unknown"
 	}
 
 	keyHint := r.URL.Query().Get("key_hint")
@@ -83,6 +85,9 @@ func (s *SigningService) handleUploadBundle(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "Submission not found", http.StatusNotFound)
 		return
 	}
+
+	// Limit request body to 50MB
+	r.Body = http.MaxBytesReader(w, r.Body, 50<<20)
 
 	// Save the bundle per-approver so each admin's signature is stored separately
 	bundlePath := s.storage.GetBundlePathForApprover(id, approver)

@@ -173,7 +173,7 @@ func handleSubmitForReview() {
 	}
 
 	planPath := submitCmd.Arg(0)
-	client := remote.NewClient(*serviceURL)
+	client := remote.NewClient(*serviceURL, os.Getenv("TERRASIGN_TOKEN"))
 
 	fmt.Printf("Submitting plan for review (requires %d approval(s))...\n", *threshold)
 	id, err := client.SubmitPlan(planPath, *submitter, *threshold)
@@ -472,12 +472,14 @@ func handleServer() {
 	serverCmd := flag.NewFlagSet("server", flag.ExitOnError)
 	port := serverCmd.Int("port", 8081, "Port to listen on")
 	storageDir := serverCmd.String("storage", "./terrasign-storage", "Storage directory for plans")
+	apiToken := serverCmd.String("api-token", os.Getenv("TERRASIGN_TOKEN"), "Optional API token to secure endpoints (defaults to TERRASIGN_TOKEN env var)")
 
 	serverCmd.Parse(os.Args[2:])
 
 	config := remote.SigningServiceConfig{
 		StorageDir: *storageDir,
 		Port:       *port,
+		APIToken:   *apiToken,
 	}
 
 	service, err := remote.NewSigningService(config)

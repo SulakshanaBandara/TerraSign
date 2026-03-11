@@ -6,6 +6,9 @@ pipeline {
         TERRASIGN_SERVICE = credentials('terrasign-service-url')  // http://terrasign-server:8081
         COSIGN_PASSWORD = credentials('cosign-password')          // Empty for demo keys
         ADMIN_PUBLIC_KEY = credentials('admin-public-key-path')   // Path to admin.pub
+        
+        // Explicitly load API token to authenticate submissions
+        TERRASIGN_TOKEN = 'demo-secret-token' // Fixed value for demo to avoid breaking Jenkins config
     }
     
     stages {

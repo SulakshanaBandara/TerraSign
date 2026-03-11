@@ -184,7 +184,7 @@ func handleLockdown() {
 
 	// Send to server with verified identity in headers
 	hostname, _ := os.Hostname()
-	client := remote.NewClient(serviceURL)
+	client := remote.NewClient(serviceURL, os.Getenv("TERRASIGN_TOKEN"))
 	if err := client.SetLockdown(mode == "on", verifiedIdentity, hostname, reason); err != nil {
 		fmt.Printf("Error communicating with server: %v\n", err)
 		os.Exit(1)

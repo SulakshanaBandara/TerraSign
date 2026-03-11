@@ -11,7 +11,11 @@ _ts_echo "Setting up TerraSign environment..."
 export PATH=$PATH:$HOME/go/bin
 
 # Set Service URL (Local)
+# Set Service URL (Local)
 export TERRASIGN_SERVICE="http://localhost:8081"
+
+# API Token for authenticating to the service
+export TERRASIGN_TOKEN="demo-secret-token"
 
 # Set empty password for demo keys (NEVER do this in production!)
 export COSIGN_PASSWORD=""

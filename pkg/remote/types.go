@@ -68,4 +68,5 @@ type SigningServiceConfig struct {
 	StorageDir string
 	Port       int
 	AdminKey   string // Path to admin public key for verification
+	APIToken   string // Optional Bearer token for authenticating API requests
 }

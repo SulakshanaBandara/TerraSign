@@ -21,7 +21,7 @@ func handleMonitor() {
 		}
 	}
 
-	client := remote.NewClient(serviceURL)
+	client := remote.NewClient(serviceURL, os.Getenv("TERRASIGN_TOKEN"))
 	admin := NewAdminCommands(serviceURL)
 
 	scanner := bufio.NewScanner(os.Stdin)

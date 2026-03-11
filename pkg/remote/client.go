@@ -20,11 +20,30 @@ type Client struct {
 	client  *http.Client
 }
 
+// authTransport injects the Authorization header into all requests if a token is present
+type authTransport struct {
+	token string
+	base  http.RoundTripper
+}
+
+func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req2 := req.Clone(req.Context())
+	req2.Header.Set("Authorization", "Bearer "+t.token)
+	return t.base.RoundTrip(req2)
+}
+
 // NewClient creates a new signing service client
-func NewClient(baseURL string) *Client {
+func NewClient(baseURL, token string) *Client {
+	transport := http.DefaultTransport
+	if token != "" {
+		transport = &authTransport{
+			token: token,
+			base:  http.DefaultTransport,
+		}
+	}
 	return &Client{
 		baseURL: baseURL,
-		client:  &http.Client{Timeout: 30 * time.Second},
+		client:  &http.Client{Timeout: 30 * time.Second, Transport: transport},
 	}
 }
 

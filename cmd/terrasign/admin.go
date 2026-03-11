@@ -20,7 +20,7 @@ type AdminCommands struct {
 // NewAdminCommands creates admin command handler
 func NewAdminCommands(serviceURL string) *AdminCommands {
 	return &AdminCommands{
-		client: remote.NewClient(serviceURL),
+		client: remote.NewClient(serviceURL, os.Getenv("TERRASIGN_TOKEN")),
 	}
 }
 

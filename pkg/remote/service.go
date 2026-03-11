@@ -31,16 +31,16 @@ func NewSigningService(config SigningServiceConfig) (*SigningService, error) {
 
 // Start starts the HTTP server
 func (s *SigningService) Start() error {
-	http.HandleFunc("/submit", s.checkLockdown(s.handleSubmit))
-	http.HandleFunc("/status/", s.checkLockdown(s.handleStatus))
-	http.HandleFunc("/download/", s.checkLockdown(s.handleDownload))
-	http.HandleFunc("/list-pending", s.checkLockdown(s.handleListPending))
-	http.HandleFunc("/approvals/", s.checkLockdown(s.handleGetApprovals))
-	http.HandleFunc("/upload-signature/", s.checkLockdown(s.handleUploadSignature))
-	http.HandleFunc("/upload-bundle/", s.checkLockdown(s.handleUploadBundle))
-	http.HandleFunc("/reject/", s.checkLockdown(s.handleReject))
-	http.HandleFunc("/policy", s.handlePolicy)     // Admin-only: get/set global approval policy
-	http.HandleFunc("/lockdown", s.handleLockdown) // No middleware for lockdown handler
+	http.HandleFunc("/submit", s.checkAuth(s.checkLockdown(s.handleSubmit)))
+	http.HandleFunc("/status/", s.checkAuth(s.checkLockdown(s.handleStatus)))
+	http.HandleFunc("/download/", s.checkAuth(s.checkLockdown(s.handleDownload)))
+	http.HandleFunc("/list-pending", s.checkAuth(s.checkLockdown(s.handleListPending)))
+	http.HandleFunc("/approvals/", s.checkAuth(s.checkLockdown(s.handleGetApprovals)))
+	http.HandleFunc("/upload-signature/", s.checkAuth(s.checkLockdown(s.handleUploadSignature)))
+	http.HandleFunc("/upload-bundle/", s.checkAuth(s.checkLockdown(s.handleUploadBundle)))
+	http.HandleFunc("/reject/", s.checkAuth(s.checkLockdown(s.handleReject)))
+	http.HandleFunc("/policy", s.checkAuth(s.handlePolicy))
+	http.HandleFunc("/lockdown", s.checkAuth(s.handleLockdown))
 
 	addr := fmt.Sprintf(":%d", s.config.Port)
 	fmt.Printf("Starting signing service on %s\n", addr)
@@ -52,6 +52,22 @@ func (s *SigningService) Start() error {
 	}
 
 	return http.ListenAndServe(addr, nil)
+}
+
+// checkAuth middleware guarantees that requests provide a valid API token if one is configured
+func (s *SigningService) checkAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.config.APIToken != "" {
+			auth := r.Header.Get("Authorization")
+			expected := "Bearer " + s.config.APIToken
+			if auth != expected {
+				fmt.Printf("[AUTH] Rejected request to %s (invalid or missing token)\n", r.URL.Path)
+				http.Error(w, "Unauthorized: invalid API token", http.StatusUnauthorized)
+				return
+			}
+		}
+		next(w, r)
+	}
 }
 
 // handleSubmit handles plan submission from CI
@@ -84,6 +100,9 @@ func (s *SigningService) handleSubmit(w http.ResponseWriter, r *http.Request) {
 			threshold = n
 		}
 	}
+
+	// Limit request body to 100MB to prevent DoS
+	r.Body = http.MaxBytesReader(w, r.Body, 100<<20)
 
 	// Store the plan
 	submission, err2 := s.storage.StorePlan(r.Body, submitter, threshold)
