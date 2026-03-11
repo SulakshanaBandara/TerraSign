@@ -2,6 +2,7 @@ package remote
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -104,12 +105,14 @@ func (s *SigningService) handleUploadBundle(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Compute a SHA-256 fingerprint of the approver's public key.
-	// The client sends the raw public key bytes in the X-Public-Key-Content header.
-	// This fingerprint is used server-side to detect the same physical key signing twice.
+	// The client sends the Base64-encoded public key bytes in X-Public-Key-B64.
+	// (PEM files contain newlines, which are illegal in raw HTTP headers.)
 	var keyFingerprint string
-	if pubKeyContent := r.Header.Get("X-Public-Key-Content"); pubKeyContent != "" {
-		hash := sha256.Sum256([]byte(pubKeyContent))
-		keyFingerprint = hex.EncodeToString(hash[:])
+	if b64 := r.Header.Get("X-Public-Key-B64"); b64 != "" {
+		if decoded, err := base64.StdEncoding.DecodeString(b64); err == nil {
+			hash := sha256.Sum256(decoded)
+			keyFingerprint = hex.EncodeToString(hash[:])
+		}
 	}
 
 	// Record the approval

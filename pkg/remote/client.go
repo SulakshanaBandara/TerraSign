@@ -3,6 +3,7 @@ package remote
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -230,12 +231,15 @@ func (c *Client) UploadBundleForApprover(id, bundlePath, approver, keyHint strin
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// If a public key path was provided, read its content and attach it so the server
-	// can compute a fingerprint and reject duplicate-key submissions.
+	// If a public key path was provided, read its content, Base64-encode it,
+	// and attach it in a header so the server can compute a fingerprint.
+	// PEM files contain newlines which are invalid in raw HTTP header values,
+	// so we encode to Base64 first (all printable ASCII, no newlines).
 	if len(pubKeyPath) > 0 && pubKeyPath[0] != "" {
 		pubKeyBytes, err := os.ReadFile(pubKeyPath[0])
 		if err == nil {
-			req.Header.Set("X-Public-Key-Content", string(pubKeyBytes))
+			encoded := base64.StdEncoding.EncodeToString(pubKeyBytes)
+			req.Header.Set("X-Public-Key-B64", encoded)
 		}
 	}
 
