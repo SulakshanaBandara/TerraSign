@@ -25,8 +25,12 @@ func NewStorage(baseDir string) (*Storage, error) {
 }
 
 // StorePlan saves a plan file and creates a submission record
-func (s *Storage) StorePlan(planData io.Reader, submitter string) (*PlanSubmission, error) {
+func (s *Storage) StorePlan(planData io.Reader, submitter string, threshold int) (*PlanSubmission, error) {
 	id := uuid.New().String()
+
+	if threshold < 1 {
+		threshold = 1 // Minimum 1 approval required
+	}
 
 	// Create directory for this submission
 	submissionDir := filepath.Join(s.baseDir, id)
@@ -48,10 +52,12 @@ func (s *Storage) StorePlan(planData io.Reader, submitter string) (*PlanSubmissi
 
 	// Create submission metadata
 	submission := &PlanSubmission{
-		ID:        id,
-		Submitter: submitter,
-		CreatedAt: time.Now(),
-		Status:    "pending",
+		ID:                id,
+		Submitter:         submitter,
+		CreatedAt:         time.Now(),
+		Status:            "pending",
+		ApprovalThreshold: threshold,
+		Approvals:         []Approval{},
 	}
 
 	// Save metadata
@@ -114,9 +120,64 @@ func (s *Storage) GetSignaturePath(id string) string {
 	return filepath.Join(s.baseDir, id, "tfplan.sig")
 }
 
-// GetBundlePath returns the path to the cosign bundle file
+// GetBundlePath returns the path to the primary cosign bundle file
 func (s *Storage) GetBundlePath(id string) string {
 	return filepath.Join(s.baseDir, id, "tfplan.bundle")
+}
+
+// GetBundlePathForApprover returns the bundle path for a specific approver
+func (s *Storage) GetBundlePathForApprover(id, approver string) string {
+	// Sanitize approver name for use as filename
+	safe := ""
+	for _, c := range approver {
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' {
+			safe += string(c)
+		} else {
+			safe += "_"
+		}
+	}
+	if safe == "" {
+		safe = "unknown"
+	}
+	return filepath.Join(s.baseDir, id, "tfplan-"+safe+".bundle")
+}
+
+// AddApproval registers one admin's approval and auto-promotes the plan when threshold is reached
+func (s *Storage) AddApproval(id string, approval Approval) (*PlanSubmission, error) {
+	submission, err := s.GetSubmission(id)
+	if err != nil {
+		return nil, err
+	}
+
+	if submission.Status == "rejected" {
+		return nil, fmt.Errorf("plan %s has been rejected and cannot be approved", id)
+	}
+
+	// Prevent duplicate approval from same reviewer
+	if submission.HasApproval(approval.Reviewer) {
+		return nil, fmt.Errorf("reviewer %q has already approved this plan", approval.Reviewer)
+	}
+
+	submission.Approvals = append(submission.Approvals, approval)
+
+	// Auto-promote if threshold is reached
+	if submission.IsFullyApproved() {
+		now := time.Now()
+		submission.Status = "approved"
+		submission.SignedAt = &now
+		submission.ReviewedBy = approval.Reviewer // Final approver
+		submission.ReviewedAt = &now
+		fmt.Printf("[APPROVED] Plan %s reached %d/%d approvals — now approved for apply.\n",
+			id, len(submission.Approvals), submission.ApprovalThreshold)
+	} else {
+		fmt.Printf("[APPROVAL %d/%d] Plan %s approved by %s.\n",
+			len(submission.Approvals), submission.ApprovalThreshold, id, approval.Reviewer)
+	}
+
+	if err := s.saveMetadata(submission); err != nil {
+		return nil, err
+	}
+	return submission, nil
 }
 
 // UpdateSubmission updates submission metadata

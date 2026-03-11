@@ -162,11 +162,26 @@ func (a *AdminCommands) Sign(id, keyPath, reviewer string) error {
 		return fmt.Errorf("failed to upload signature: %w", err)
 	}
 
-	// Upload the bundle to the server
+	// Upload the bundle to the server, tagged with this reviewer's name
 	bundlePath := planPath + ".bundle"
-	if err := a.client.UploadBundle(id, bundlePath); err != nil {
+	keyHint := filepath.Base(keyPath)
+	if err := a.client.UploadBundleForApprover(id, bundlePath, reviewer, keyHint); err != nil {
 		// Log but don't fail, to remain backward compatible
 		fmt.Printf("[WARN] Could not upload bundle to server: %v\n", err)
+	}
+
+	// Fetch and display updated approval status
+	if sub, err := a.client.GetApprovals(id); err == nil {
+		fmt.Printf("\n🔐 Approval Status: %s approvals received\n", sub.ApprovalCount())
+		for _, approval := range sub.Approvals {
+			fmt.Printf("   ✓ %s (at %s)\n", approval.Reviewer, approval.ApprovedAt.Format("15:04:05"))
+		}
+		if sub.IsFullyApproved() {
+			fmt.Printf("\n✅ PLAN FULLY APPROVED! Ready for ts-verify apply.\n")
+		} else {
+			fmt.Printf("\n⏳ Waiting for %d more approval(s) before plan can be applied.\n",
+				sub.ApprovalThreshold-len(sub.Approvals))
+		}
 	}
 
 	// Also download the signature to the current working directory

@@ -30,14 +30,15 @@ func (c *Client) BaseURL() string {
 }
 
 // SubmitPlan submits a plan for review
-func (c *Client) SubmitPlan(planPath, submitter string) (string, error) {
+func (c *Client) SubmitPlan(planPath, submitter string, threshold int) (string, error) {
 	file, err := os.Open(planPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to open plan file: %w", err)
 	}
 	defer file.Close()
 
-	req, err := http.NewRequest("POST", c.baseURL+"/submit?submitter="+submitter, file)
+	url := fmt.Sprintf("%s/submit?submitter=%s&threshold=%d", c.baseURL, submitter, threshold)
+	req, err := http.NewRequest("POST", url, file)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
@@ -53,12 +54,13 @@ func (c *Client) SubmitPlan(planPath, submitter string) (string, error) {
 		return "", fmt.Errorf("server error: %s", string(body))
 	}
 
-	var result map[string]string
+	var result map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return "", fmt.Errorf("failed to parse response: %w", err)
 	}
 
-	return result["id"], nil
+	id, _ := result["id"].(string)
+	return id, nil
 }
 
 // GetStatus gets the status of a submission
@@ -201,6 +203,11 @@ func (c *Client) UploadSignature(id, signaturePath string) error {
 
 // UploadBundle uploads a cosign bundle file for a submission
 func (c *Client) UploadBundle(id, bundlePath string) error {
+	return c.UploadBundleForApprover(id, bundlePath, "admin", "")
+}
+
+// UploadBundleForApprover uploads a bundle file and records the approval under the given reviewer name
+func (c *Client) UploadBundleForApprover(id, bundlePath, approver, keyHint string) error {
 	file, err := os.Open(bundlePath)
 	if err != nil {
 		return fmt.Errorf("failed to open bundle file: %w", err)
@@ -212,7 +219,7 @@ func (c *Client) UploadBundle(id, bundlePath string) error {
 		return fmt.Errorf("failed to read bundle: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/upload-bundle/%s", c.baseURL, id)
+	url := fmt.Sprintf("%s/upload-bundle/%s?approver=%s&key_hint=%s", c.baseURL, id, approver, keyHint)
 	req, err := http.NewRequest("POST", url, bytes.NewReader(data))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -224,12 +231,31 @@ func (c *Client) UploadBundle(id, bundlePath string) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusConflict {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("server error: %s", string(body))
 	}
 
 	return nil
+}
+
+// GetApprovals retrieves the multi-party approval status for a submission
+func (c *Client) GetApprovals(id string) (*PlanSubmission, error) {
+	resp, err := c.client.Get(fmt.Sprintf("%s/approvals/%s", c.baseURL, id))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get approvals: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("submission not found")
+	}
+
+	var submission PlanSubmission
+	if err := json.NewDecoder(resp.Body).Decode(&submission); err != nil {
+		return nil, fmt.Errorf("failed to parse approvals response: %w", err)
+	}
+	return &submission, nil
 }
 
 // SetLockdown enables or disables emergency lockdown.

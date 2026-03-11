@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -34,6 +35,7 @@ func (s *SigningService) Start() error {
 	http.HandleFunc("/status/", s.checkLockdown(s.handleStatus))
 	http.HandleFunc("/download/", s.checkLockdown(s.handleDownload))
 	http.HandleFunc("/list-pending", s.checkLockdown(s.handleListPending))
+	http.HandleFunc("/approvals/", s.checkLockdown(s.handleGetApprovals))
 	http.HandleFunc("/upload-signature/", s.checkLockdown(s.handleUploadSignature))
 	http.HandleFunc("/upload-bundle/", s.checkLockdown(s.handleUploadBundle))
 	http.HandleFunc("/reject/", s.checkLockdown(s.handleReject))
@@ -61,8 +63,16 @@ func (s *SigningService) handleSubmit(w http.ResponseWriter, r *http.Request) {
 		submitter = "unknown"
 	}
 
+	// Get approval threshold (default 1 for backward compat, use 2 for multi-party)
+	threshold := 1
+	if t := r.URL.Query().Get("threshold"); t != "" {
+		if n, err := strconv.Atoi(t); err == nil && n >= 1 {
+			threshold = n
+		}
+	}
+
 	// Store the plan
-	submission, err := s.storage.StorePlan(r.Body, submitter)
+	submission, err := s.storage.StorePlan(r.Body, submitter, threshold)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to store plan: %v", err), http.StatusInternalServerError)
 		return
@@ -70,9 +80,10 @@ func (s *SigningService) handleSubmit(w http.ResponseWriter, r *http.Request) {
 
 	// Return submission ID
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"id":     submission.ID,
-		"status": submission.Status,
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"id":                 submission.ID,
+		"status":             submission.Status,
+		"approval_threshold": submission.ApprovalThreshold,
 	})
 }
 
@@ -146,6 +157,31 @@ func (s *SigningService) handleListPending(w http.ResponseWriter, r *http.Reques
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(pending)
+}
+
+// handleGetApprovals returns approval status for a specific submission
+func (s *SigningService) handleGetApprovals(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Path[len("/approvals/"):]
+	if id == "" {
+		http.Error(w, "Missing submission ID", http.StatusBadRequest)
+		return
+	}
+
+	submission, err := s.storage.GetSubmission(id)
+	if err != nil {
+		http.Error(w, "Submission not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"id":                 submission.ID,
+		"status":             submission.Status,
+		"approval_threshold": submission.ApprovalThreshold,
+		"approvals":          submission.Approvals,
+		"approval_count":     len(submission.Approvals),
+		"is_fully_approved":  submission.IsFullyApproved(),
+	})
 }
 
 // MarkSigned marks a submission as signed (called after admin signs)

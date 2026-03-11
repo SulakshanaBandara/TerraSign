@@ -160,6 +160,7 @@ func handleSubmitForReview() {
 	submitCmd := flag.NewFlagSet("submit-for-review", flag.ExitOnError)
 	serviceURL := submitCmd.String("service", defaultServiceURL, "Signing service URL")
 	submitter := submitCmd.String("submitter", "ci-pipeline", "Submitter identifier")
+	threshold := submitCmd.Int("threshold", 1, "Number of approvals required before plan can be applied (multi-party)")
 	wait := submitCmd.Bool("wait", false, "Wait for signature before returning")
 	timeout := submitCmd.Duration("timeout", 30*time.Minute, "Timeout for waiting")
 
@@ -174,8 +175,8 @@ func handleSubmitForReview() {
 	planPath := submitCmd.Arg(0)
 	client := remote.NewClient(*serviceURL)
 
-	fmt.Printf("Submitting plan for review...\n")
-	id, err := client.SubmitPlan(planPath, *submitter)
+	fmt.Printf("Submitting plan for review (requires %d approval(s))...\n", *threshold)
+	id, err := client.SubmitPlan(planPath, *submitter, *threshold)
 	if err != nil {
 		fmt.Printf("Error submitting plan: %v\n", err)
 		os.Exit(1)

@@ -48,11 +48,17 @@ func handleMonitor() {
 				fmt.Fprintln(w, "--\t---------\t----------\t------")
 
 				for _, p := range pending {
+					status := p.Status
+					if p.Status == "pending" && p.ApprovalThreshold > 1 {
+						status = fmt.Sprintf("pending (%s approvals)", p.ApprovalCount())
+					} else if p.Status == "approved" {
+						status = fmt.Sprintf("✅ approved (%s)", p.ApprovalCount())
+					}
 					fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
 						p.ID,
 						p.Submitter,
 						p.CreatedAt.Format("15:04:05"),
-						p.Status)
+						status)
 				}
 				w.Flush()
 			}
