@@ -142,7 +142,10 @@ func (s *Storage) GetBundlePathForApprover(id, approver string) string {
 	return filepath.Join(s.baseDir, id, "tfplan-"+safe+".bundle")
 }
 
-// AddApproval registers one admin's approval and auto-promotes the plan when threshold is reached
+// AddApproval registers one admin's approval and auto-promotes the plan when threshold is reached.
+// It enforces two security invariants:
+//  1. The same reviewer name cannot sign twice.
+//  2. The same cryptographic key fingerprint cannot sign twice (prevents bypass via name change).
 func (s *Storage) AddApproval(id string, approval Approval) (*PlanSubmission, error) {
 	submission, err := s.GetSubmission(id)
 	if err != nil {
@@ -153,9 +156,32 @@ func (s *Storage) AddApproval(id string, approval Approval) (*PlanSubmission, er
 		return nil, fmt.Errorf("plan %s has been rejected and cannot be approved", id)
 	}
 
-	// Prevent duplicate approval from same reviewer
+	if submission.Status == "approved" {
+		return nil, fmt.Errorf("plan %s is already fully approved", id)
+	}
+
+	// Invariant 1: reject duplicate reviewer name
 	if submission.HasApproval(approval.Reviewer) {
 		return nil, fmt.Errorf("reviewer %q has already approved this plan", approval.Reviewer)
+	}
+
+	// Invariant 2: reject duplicate key fingerprint (same person signing with a different name)
+	if submission.HasApprovalFromKey(approval.KeyFingerprint) {
+		return nil, fmt.Errorf("the signing key used by %q has already approved this plan — each approver must use a distinct key", approval.Reviewer)
+	}
+
+	// Invariant 3: if policy has authorized key list, verify this key is on it
+	if policy, err2 := s.GetGlobalPolicy(); err2 == nil && len(policy.AuthorizedKeys) > 0 {
+		authorized := false
+		for _, ak := range policy.AuthorizedKeys {
+			if ak.Fingerprint != "" && ak.Fingerprint == approval.KeyFingerprint {
+				authorized = true
+				break
+			}
+		}
+		if !authorized && approval.KeyFingerprint != "" {
+			return nil, fmt.Errorf("key used by %q (fingerprint: %s) is not in the list of authorized approvers", approval.Reviewer, approval.KeyFingerprint[:12]+"...")
+		}
 	}
 
 	submission.Approvals = append(submission.Approvals, approval)
@@ -165,13 +191,13 @@ func (s *Storage) AddApproval(id string, approval Approval) (*PlanSubmission, er
 		now := time.Now()
 		submission.Status = "approved"
 		submission.SignedAt = &now
-		submission.ReviewedBy = approval.Reviewer // Final approver
+		submission.ReviewedBy = approval.Reviewer
 		submission.ReviewedAt = &now
-		fmt.Printf("[APPROVED] Plan %s reached %d/%d approvals — now approved for apply.\n",
+		fmt.Printf("[APPROVED] Plan %s reached %d/%d approvals. Approved for apply.\n",
 			id, len(submission.Approvals), submission.ApprovalThreshold)
 	} else {
-		fmt.Printf("[APPROVAL %d/%d] Plan %s approved by %s.\n",
-			len(submission.Approvals), submission.ApprovalThreshold, id, approval.Reviewer)
+		fmt.Printf("[APPROVAL %d/%d] Plan %s approved by %s (key: %s).\n",
+			len(submission.Approvals), submission.ApprovalThreshold, id, approval.Reviewer, approval.KeyHint)
 	}
 
 	if err := s.saveMetadata(submission); err != nil {
@@ -200,12 +226,20 @@ func (s *Storage) saveMetadata(submission *PlanSubmission) error {
 	return nil
 }
 
+// AuthorizedKey represents a public key that is permitted to sign plan approvals
+type AuthorizedKey struct {
+	Name          string `json:"name"`                  // Human label for audit log
+	PublicKeyPath string `json:"public_key_path"`       // Path to .pub file on disk (server-side)
+	Fingerprint   string `json:"fingerprint,omitempty"` // SHA-256 of the public key bytes
+}
+
 // GlobalPolicy holds server-wide approval policy
 type GlobalPolicy struct {
-	ApprovalThreshold int    `json:"approval_threshold"` // 0 means not set (use per-submission default)
-	SetBy             string `json:"set_by,omitempty"`
-	SetAt             string `json:"set_at,omitempty"`
-	Reason            string `json:"reason,omitempty"`
+	ApprovalThreshold int             `json:"approval_threshold"`        // How many distinct approvals are required
+	AuthorizedKeys    []AuthorizedKey `json:"authorized_keys,omitempty"` // If non-empty, only these keys may approve
+	SetBy             string          `json:"set_by,omitempty"`
+	SetAt             string          `json:"set_at,omitempty"`
+	Reason            string          `json:"reason,omitempty"`
 }
 
 // policyPath returns the path to the global policy file

@@ -188,7 +188,16 @@ func handleMonitor() {
 				if policy.Reason != "" {
 					fmt.Printf("Reason: %s\n", policy.Reason)
 				}
+				if len(policy.AuthorizedKeys) > 0 {
+					fmt.Printf("Authorized signing keys:\n")
+					for i, ak := range policy.AuthorizedKeys {
+						fmt.Printf("  [%d] %s  (fingerprint: %s...)\n", i+1, ak.Name, ak.Fingerprint[:16])
+					}
+				} else {
+					fmt.Printf("Authorized keys: any key accepted\n")
+				}
 			}
+
 			fmt.Print("\nEnter new threshold (1-9, or Enter to keep current): ")
 			if !scanner.Scan() {
 				continue
@@ -204,6 +213,7 @@ func handleMonitor() {
 				scanner.Scan()
 				continue
 			}
+
 			fmt.Print("Enter your name (for audit log): ")
 			var policyAdmin string
 			if scanner.Scan() {
@@ -212,15 +222,45 @@ func handleMonitor() {
 			if policyAdmin == "" {
 				policyAdmin = "admin"
 			}
-			fmt.Print("Reason for change (optional): ")
+
+			// Collect authorized public key paths — one per approver slot
+			fmt.Printf("\nEnter the public key file path for each authorized approver.\n")
+			fmt.Printf("Each approver must use their own distinct key. Press Enter with no input to finish.\n")
+			var authorizedKeyPaths []string
+			for i := 1; i <= newThresh; i++ {
+				fmt.Printf("  Authorized key [%d/%d] (path to .pub file): ", i, newThresh)
+				if !scanner.Scan() {
+					break
+				}
+				kp := strings.TrimSpace(scanner.Text())
+				if kp == "" {
+					fmt.Printf("  (skipped — any key will be accepted for slot %d)\n", i)
+					continue
+				}
+				// Verify file exists
+				if _, err := os.Stat(kp); err != nil {
+					fmt.Printf("  [WARN] File not found: %s — skipping.\n", kp)
+					continue
+				}
+				authorizedKeyPaths = append(authorizedKeyPaths, kp)
+				fmt.Printf("  [OK] Added: %s\n", kp)
+			}
+
+			fmt.Print("Reason for policy change: ")
 			var reason string
 			if scanner.Scan() {
 				reason = strings.TrimSpace(scanner.Text())
 			}
-			if _, err := client.SetPolicy(newThresh, policyAdmin, reason); err != nil {
+
+			if _, err := client.SetPolicy(newThresh, policyAdmin, reason, authorizedKeyPaths...); err != nil {
 				fmt.Printf("Error setting policy: %v\n", err)
 			} else {
 				fmt.Printf("\n[OK] Policy updated: all new plans now require %d approval(s).\n", newThresh)
+				if len(authorizedKeyPaths) > 0 {
+					fmt.Printf("[OK] Only %d registered key(s) may approve plans.\n", len(authorizedKeyPaths))
+				} else {
+					fmt.Printf("[INFO] No specific keys registered — any key will be accepted.\n")
+				}
 			}
 			fmt.Print("Press Enter to continue...")
 			scanner.Scan()

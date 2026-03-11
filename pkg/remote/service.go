@@ -117,9 +117,13 @@ func (s *SigningService) handlePolicy(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodPost:
 		var req struct {
-			Threshold int    `json:"threshold"`
-			SetBy     string `json:"set_by"`
-			Reason    string `json:"reason"`
+			Threshold      int    `json:"threshold"`
+			SetBy          string `json:"set_by"`
+			Reason         string `json:"reason"`
+			AuthorizedKeys []struct {
+				Name        string `json:"name"`
+				Fingerprint string `json:"fingerprint"`
+			} `json:"authorized_keys,omitempty"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, fmt.Sprintf("Invalid request: %v", err), http.StatusBadRequest)
@@ -132,8 +136,22 @@ func (s *SigningService) handlePolicy(w http.ResponseWriter, r *http.Request) {
 		if req.SetBy == "" {
 			req.SetBy = "admin"
 		}
+
+		// Build authorized keys list
+		var authorizedKeys []AuthorizedKey
+		for _, ak := range req.AuthorizedKeys {
+			if ak.Fingerprint == "" {
+				continue
+			}
+			authorizedKeys = append(authorizedKeys, AuthorizedKey{
+				Name:        ak.Name,
+				Fingerprint: ak.Fingerprint,
+			})
+		}
+
 		newPolicy := &GlobalPolicy{
 			ApprovalThreshold: req.Threshold,
+			AuthorizedKeys:    authorizedKeys,
 			SetBy:             req.SetBy,
 			SetAt:             time.Now().Format(time.RFC3339),
 			Reason:            req.Reason,
@@ -142,6 +160,14 @@ func (s *SigningService) handlePolicy(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, fmt.Sprintf("Failed to set policy: %v", err), http.StatusInternalServerError)
 			return
 		}
+
+		if len(authorizedKeys) > 0 {
+			fmt.Printf("[POLICY] Authorized keys registered: %d\n", len(authorizedKeys))
+			for _, ak := range authorizedKeys {
+				fmt.Printf("  - %s (fingerprint: %s...)\n", ak.Name, ak.Fingerprint[:16])
+			}
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(newPolicy)
 

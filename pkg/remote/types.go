@@ -7,10 +7,11 @@ import (
 
 // Approval represents a single admin's cryptographic approval of a plan
 type Approval struct {
-	Reviewer   string    `json:"reviewer"`
-	ApprovedAt time.Time `json:"approved_at"`
-	KeyHint    string    `json:"key_hint,omitempty"` // Last 8 chars of key filename for audit
-	BundleFile string    `json:"bundle_file"`        // Filename of this approver's bundle
+	Reviewer       string    `json:"reviewer"`
+	ApprovedAt     time.Time `json:"approved_at"`
+	KeyHint        string    `json:"key_hint,omitempty"`        // Key filename for audit display
+	KeyFingerprint string    `json:"key_fingerprint,omitempty"` // SHA-256 of the public key bytes
+	BundleFile     string    `json:"bundle_file"`               // Filename of this approver's bundle
 }
 
 // PlanSubmission represents a plan submitted for review
@@ -38,10 +39,24 @@ func (p *PlanSubmission) IsFullyApproved() bool {
 	return p.ApprovalThreshold > 0 && len(p.Approvals) >= p.ApprovalThreshold
 }
 
-// HasApproval returns true if the given reviewer has already signed
+// HasApproval returns true if the given reviewer name has already signed
 func (p *PlanSubmission) HasApproval(reviewer string) bool {
 	for _, a := range p.Approvals {
 		if a.Reviewer == reviewer {
+			return true
+		}
+	}
+	return false
+}
+
+// HasApprovalFromKey returns true if the given key fingerprint has already signed.
+// This prevents the same physical key from counting twice even with a different reviewer name.
+func (p *PlanSubmission) HasApprovalFromKey(fingerprint string) bool {
+	if fingerprint == "" {
+		return false
+	}
+	for _, a := range p.Approvals {
+		if a.KeyFingerprint == fingerprint {
 			return true
 		}
 	}

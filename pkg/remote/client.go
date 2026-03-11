@@ -2,11 +2,14 @@ package remote
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -206,8 +209,10 @@ func (c *Client) UploadBundle(id, bundlePath string) error {
 	return c.UploadBundleForApprover(id, bundlePath, "admin", "")
 }
 
-// UploadBundleForApprover uploads a bundle file and records the approval under the given reviewer name
-func (c *Client) UploadBundleForApprover(id, bundlePath, approver, keyHint string) error {
+// UploadBundleForApprover uploads a bundle file and records the approval under the given reviewer name.
+// pubKeyPath is the path to the approver's public key (.pub) file — its content is sent to the server
+// so the server can compute a fingerprint and enforce that the same physical key is not used twice.
+func (c *Client) UploadBundleForApprover(id, bundlePath, approver, keyHint string, pubKeyPath ...string) error {
 	file, err := os.Open(bundlePath)
 	if err != nil {
 		return fmt.Errorf("failed to open bundle file: %w", err)
@@ -225,13 +230,27 @@ func (c *Client) UploadBundleForApprover(id, bundlePath, approver, keyHint strin
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
+	// If a public key path was provided, read its content and attach it so the server
+	// can compute a fingerprint and reject duplicate-key submissions.
+	if len(pubKeyPath) > 0 && pubKeyPath[0] != "" {
+		pubKeyBytes, err := os.ReadFile(pubKeyPath[0])
+		if err == nil {
+			req.Header.Set("X-Public-Key-Content", string(pubKeyBytes))
+		}
+	}
+
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to upload bundle: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusConflict {
+	if resp.StatusCode == http.StatusConflict {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("approval rejected: %s", string(body))
+	}
+
+	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("server error: %s", string(body))
 	}
@@ -336,13 +355,42 @@ func (c *Client) GetPolicy() (*GlobalPolicy, error) {
 	return &policy, nil
 }
 
-// SetPolicy updates the server-wide approval threshold policy
-func (c *Client) SetPolicy(threshold int, setBy, reason string) (*GlobalPolicy, error) {
-	body, _ := json.Marshal(map[string]interface{}{
+// SetPolicy updates the server-wide approval threshold policy.
+// authorizedKeyPaths is an optional list of paths to .pub key files.
+// Their SHA-256 fingerprints are computed locally and sent to the server.
+// When set, only these keys will be permitted to sign plan approvals.
+func (c *Client) SetPolicy(threshold int, setBy, reason string, authorizedKeyPaths ...string) (*GlobalPolicy, error) {
+	// Build authorized keys list with fingerprints
+	type keyEntry struct {
+		Name        string `json:"name"`
+		Fingerprint string `json:"fingerprint"`
+	}
+	var authorizedKeys []keyEntry
+	for _, path := range authorizedKeyPaths {
+		if path == "" {
+			continue
+		}
+		keyBytes, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read public key %q: %w", path, err)
+		}
+		h := sha256sum(keyBytes)
+		authorizedKeys = append(authorizedKeys, keyEntry{
+			Name:        filepath.Base(path),
+			Fingerprint: h,
+		})
+	}
+
+	payload := map[string]interface{}{
 		"threshold": threshold,
 		"set_by":    setBy,
 		"reason":    reason,
-	})
+	}
+	if len(authorizedKeys) > 0 {
+		payload["authorized_keys"] = authorizedKeys
+	}
+
+	body, _ := json.Marshal(payload)
 	resp, err := c.client.Post(c.baseURL+"/policy", "application/json", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to set policy: %w", err)
@@ -359,4 +407,10 @@ func (c *Client) SetPolicy(threshold int, setBy, reason string) (*GlobalPolicy, 
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 	return &policy, nil
+}
+
+// sha256sum returns the hex-encoded SHA-256 of the given bytes
+func sha256sum(data []byte) string {
+	h := sha256.Sum256(data)
+	return hex.EncodeToString(h[:])
 }

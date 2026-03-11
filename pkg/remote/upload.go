@@ -1,6 +1,8 @@
 package remote
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -101,12 +103,22 @@ func (s *SigningService) handleUploadBundle(w http.ResponseWriter, r *http.Reque
 		fmt.Printf("[WARN] Could not write primary bundle: %v\n", err)
 	}
 
+	// Compute a SHA-256 fingerprint of the approver's public key.
+	// The client sends the raw public key bytes in the X-Public-Key-Content header.
+	// This fingerprint is used server-side to detect the same physical key signing twice.
+	var keyFingerprint string
+	if pubKeyContent := r.Header.Get("X-Public-Key-Content"); pubKeyContent != "" {
+		hash := sha256.Sum256([]byte(pubKeyContent))
+		keyFingerprint = hex.EncodeToString(hash[:])
+	}
+
 	// Record the approval
 	approval := Approval{
-		Reviewer:   approver,
-		ApprovedAt: time.Now(),
-		KeyHint:    keyHint,
-		BundleFile: filepath.Base(bundlePath),
+		Reviewer:       approver,
+		ApprovedAt:     time.Now(),
+		KeyHint:        keyHint,
+		KeyFingerprint: keyFingerprint,
+		BundleFile:     filepath.Base(bundlePath),
 	}
 
 	submission, err := s.storage.AddApproval(id, approval)

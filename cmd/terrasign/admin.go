@@ -162,12 +162,15 @@ func (a *AdminCommands) Sign(id, keyPath, reviewer string) error {
 		return fmt.Errorf("failed to upload signature: %w", err)
 	}
 
-	// Upload the bundle to the server, tagged with this reviewer's name
+	// Upload the bundle to the server, tagged with this reviewer's name and public key.
+	// The public key is sent so the server can deduplicate by key fingerprint.
 	bundlePath := planPath + ".bundle"
 	keyHint := filepath.Base(keyPath)
-	if err := a.client.UploadBundleForApprover(id, bundlePath, reviewer, keyHint); err != nil {
-		// Log but don't fail, to remain backward compatible
-		fmt.Printf("[WARN] Could not upload bundle to server: %v\n", err)
+	// Derive the public key path: admin.key -> admin.pub
+	pubKeyPath := keyPath[:len(keyPath)-len(filepath.Ext(keyPath))] + ".pub"
+	if err := a.client.UploadBundleForApprover(id, bundlePath, reviewer, keyHint, pubKeyPath); err != nil {
+		// Return the error — duplicate key rejection should be visible to the admin
+		return fmt.Errorf("approval rejected by server: %w", err)
 	}
 
 	// Fetch and display updated approval status
