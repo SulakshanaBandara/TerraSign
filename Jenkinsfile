@@ -159,7 +159,7 @@ pipeline {
                         # Use the admin.pub file natively stored in the repository
                         # instead of the Jenkins credential to bypass formatting errors.
                         # It dynamically discovers all .pub files via --key-dir.
-                        terrasign wrap --key-dir . -- apply tfplan
+                        $HOME/go/bin/terrasign wrap --key-dir . -- apply tfplan
                     '''
                 }
             }
