@@ -1,0 +1,7 @@
+Submitting plan for review (requires 2 approval(s))...
+Plan submitted successfully!
+Submission ID: e67a6f0c-c98a-4793-ac76-0b12c559794f
+
+Admin can review and sign with:
+  terrasign admin download e67a6f0c-c98a-4793-ac76-0b12c559794f
+  terrasign admin sign e67a6f0c-c98a-4793-ac76-0b12c559794f --key <admin-key>

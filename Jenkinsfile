@@ -153,14 +153,14 @@ pipeline {
             steps {
                 dir('examples/simple-app') {
                     // Use terrasign wrapper to verify before applying
-                    sh '''
-                        export PATH=$HOME/go/bin:$PATH
+                    sh """
+                        export PATH=\$HOME/go/bin:\$PATH
                         
                         # Use the admin.pub file natively stored in the repository
                         # instead of the Jenkins credential to bypass formatting errors.
                         # It dynamically discovers all .pub files via --key-dir.
-                        $HOME/go/bin/terrasign wrap --key-dir . -- apply tfplan
-                    '''
+                        \$HOME/go/bin/terrasign wrap --service ${REACHABLE_SERVICE} --key-dir . -- apply tfplan
+                    """
                 }
             }
         }
