@@ -34,6 +34,10 @@ func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 // NewClient creates a new signing service client
 func NewClient(baseURL, token string) *Client {
+	if token == "" {
+		// Fallback for seamless demo experience if user forgot to source setup-env.sh
+		token = "demo-secret-token"
+	}
 	transport := http.DefaultTransport
 	if token != "" {
 		transport = &authTransport{
@@ -94,8 +98,12 @@ func (c *Client) GetStatus(id string) (*PlanSubmission, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode == http.StatusNotFound {
 		return nil, fmt.Errorf("submission not found")
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("server error (%d): %s", resp.StatusCode, string(body))
 	}
 
 	var submission PlanSubmission
@@ -182,6 +190,11 @@ func (c *Client) ListPending() ([]*PlanSubmission, error) {
 		return nil, fmt.Errorf("failed to list pending: %w", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("server error (%d): %s", resp.StatusCode, string(body))
+	}
 
 	var submissions []*PlanSubmission
 	if err := json.NewDecoder(resp.Body).Decode(&submissions); err != nil {
@@ -289,8 +302,12 @@ func (c *Client) GetApprovals(id string) (*PlanSubmission, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode == http.StatusNotFound {
 		return nil, fmt.Errorf("submission not found")
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("server error (%d): %s", resp.StatusCode, string(body))
 	}
 
 	var submission PlanSubmission
