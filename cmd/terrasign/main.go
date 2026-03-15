@@ -137,9 +137,10 @@ func handleVerify() {
 
 func handleWrap() {
 	wrapCmd := flag.NewFlagSet("wrap", flag.ExitOnError)
-	identity := wrapCmd.String("identity", "", "Identity to verify against")
+	identity := wrapCmd.String("identity", "", "Identity to verify against (keyless)")
 	issuer := wrapCmd.String("issuer", "https://github.com/login/oauth", "OIDC Issuer")
-	keyPath := wrapCmd.String("key", "", "Path to public key (for key-based verification)")
+	keyDir := wrapCmd.String("key-dir", "", "Directory containing authorized public keys (.pub)")
+	serviceURL := wrapCmd.String("service", defaultServiceURL, "Signing service URL")
 
 	wrapCmd.Parse(os.Args[2:])
 
@@ -149,7 +150,7 @@ func handleWrap() {
 		os.Exit(1)
 	}
 
-	err := terraform.Execute(terraformArgs, *keyPath, *identity, *issuer)
+	err := terraform.Execute(terraformArgs, *keyDir, *identity, *issuer, *serviceURL)
 	if err != nil {
 		fmt.Printf("Error executing terraform: %v\n", err)
 		os.Exit(1)

@@ -127,7 +127,7 @@ ts-verify() {
     if [ -d "$target_dir" ]; then
         cd "$target_dir" || return 1
     fi
-    $HOME/go/bin/terrasign wrap --key admin.pub -- "$@"
+    $HOME/go/bin/terrasign wrap --key-dir . -- "$@"
 }
 
 # Download signature for a submission

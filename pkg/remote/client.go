@@ -114,6 +114,30 @@ func (c *Client) GetStatus(id string) (*PlanSubmission, error) {
 	return &submission, nil
 }
 
+// GetStatusByHash gets the submission status using the plan's hash
+func (c *Client) GetStatusByHash(hash string) (*PlanSubmission, error) {
+	resp, err := c.client.Get(c.baseURL + "/status/hash/" + hash)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get status by hash: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("submission not found")
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("server error (%d): %s", resp.StatusCode, string(body))
+	}
+
+	var submission PlanSubmission
+	if err := json.NewDecoder(resp.Body).Decode(&submission); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	return &submission, nil
+}
+
 // WaitForSignature polls until the plan is signed or timeout
 func (c *Client) WaitForSignature(id string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
@@ -144,22 +168,31 @@ func (c *Client) WaitForSignature(id string, timeout time.Duration) error {
 
 // DownloadPlan downloads the plan file
 func (c *Client) DownloadPlan(id, outputPath string) error {
-	return c.downloadFile(id, "plan", outputPath)
+	return c.downloadFile(id, "plan", "", outputPath)
 }
 
 // DownloadSignature downloads the signature file
 func (c *Client) DownloadSignature(id, outputPath string) error {
-	return c.downloadFile(id, "signature", outputPath)
+	return c.downloadFile(id, "signature", "", outputPath)
 }
 
-// DownloadBundle downloads the cosign bundle file
+// DownloadBundle downloads the primary cosign bundle file
 func (c *Client) DownloadBundle(id, outputPath string) error {
-	return c.downloadFile(id, "bundle", outputPath)
+	return c.downloadFile(id, "bundle", "", outputPath)
+}
+
+// DownloadBundleForApprover downloads a specific approver's cosign bundle file
+func (c *Client) DownloadBundleForApprover(id, approver, outputPath string) error {
+	return c.downloadFile(id, "bundle", approver, outputPath)
 }
 
 // downloadFile downloads a file from the service
-func (c *Client) downloadFile(id, fileType, outputPath string) error {
+func (c *Client) downloadFile(id, fileType, approver, outputPath string) error {
 	url := fmt.Sprintf("%s/download/%s/%s", c.baseURL, id, fileType)
+	if approver != "" {
+		url += "?approver=" + approver
+	}
+
 	resp, err := c.client.Get(url)
 	if err != nil {
 		return fmt.Errorf("failed to download: %w", err)

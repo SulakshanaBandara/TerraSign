@@ -33,6 +33,7 @@ func NewSigningService(config SigningServiceConfig) (*SigningService, error) {
 func (s *SigningService) Start() error {
 	http.HandleFunc("/submit", s.checkAuth(s.checkLockdown(s.handleSubmit)))
 	http.HandleFunc("/status/", s.checkAuth(s.checkLockdown(s.handleStatus)))
+	http.HandleFunc("/status/hash/", s.checkAuth(s.checkLockdown(s.handleStatusByHash)))
 	http.HandleFunc("/download/", s.checkAuth(s.checkLockdown(s.handleDownload)))
 	http.HandleFunc("/list-pending", s.checkAuth(s.checkLockdown(s.handleListPending)))
 	http.HandleFunc("/approvals/", s.checkAuth(s.checkLockdown(s.handleGetApprovals)))
@@ -213,6 +214,24 @@ func (s *SigningService) handleStatus(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(submission)
 }
 
+// handleStatusByHash returns submission metadata by its plan hash
+func (s *SigningService) handleStatusByHash(w http.ResponseWriter, r *http.Request) {
+	hash := r.URL.Path[len("/status/hash/"):]
+	if hash == "" {
+		http.Error(w, "Missing hash", http.StatusBadRequest)
+		return
+	}
+
+	submission, err := s.storage.GetSubmissionByHash(hash)
+	if err != nil {
+		http.Error(w, "Submission not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(submission)
+}
+
 // handleDownload allows admins to download plans and signatures
 func (s *SigningService) handleDownload(w http.ResponseWriter, r *http.Request) {
 	// Format: /download/{id}/{file}
@@ -240,7 +259,12 @@ func (s *SigningService) handleDownload(w http.ResponseWriter, r *http.Request) 
 	case "signature":
 		filePath = s.storage.GetSignaturePath(id)
 	case "bundle":
-		filePath = s.storage.GetBundlePath(id)
+		approver := r.URL.Query().Get("approver")
+		if approver != "" {
+			filePath = s.storage.GetBundlePathForApprover(id, approver)
+		} else {
+			filePath = s.storage.GetBundlePath(id)
+		}
 	default:
 		http.Error(w, "Invalid file type", http.StatusBadRequest)
 		return

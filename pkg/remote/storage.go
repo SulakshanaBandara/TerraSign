@@ -1,6 +1,8 @@
 package remote
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -50,9 +52,18 @@ func (s *Storage) StorePlan(planData io.Reader, submitter string, threshold int)
 		return nil, fmt.Errorf("failed to write plan data: %w", err)
 	}
 
+	// Calculate SHA-256 hash of the plan file
+	planFile.Seek(0, 0)
+	h := sha256.New()
+	if _, err := io.Copy(h, planFile); err != nil {
+		return nil, fmt.Errorf("failed to compute plan hash: %w", err)
+	}
+	planHash := hex.EncodeToString(h.Sum(nil))
+
 	// Create submission metadata
 	submission := &PlanSubmission{
 		ID:                id,
+		PlanHash:          planHash,
 		Submitter:         submitter,
 		CreatedAt:         time.Now(),
 		Status:            "pending",
@@ -82,6 +93,31 @@ func (s *Storage) GetSubmission(id string) (*PlanSubmission, error) {
 	}
 
 	return &submission, nil
+}
+
+// GetSubmissionByHash retrieves a submission by its plan hash
+func (s *Storage) GetSubmissionByHash(hash string) (*PlanSubmission, error) {
+	entries, err := os.ReadDir(s.baseDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read storage directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		submission, err := s.GetSubmission(entry.Name())
+		if err != nil {
+			continue
+		}
+
+		if submission.PlanHash == hash {
+			return submission, nil
+		}
+	}
+
+	return nil, fmt.Errorf("submission with hash %s not found", hash)
 }
 
 // ListPending returns all pending submissions
