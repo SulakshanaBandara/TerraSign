@@ -76,14 +76,15 @@ pipeline {
                     for (url in candidateUrls) {
                         try {
                             echo "Testing connection to ${url}..."
-                            // Try calling list-pending. A 200, 401 (auth required), or 403 (lockdown) means the server is UP.
-                            // We use a bash script to ensure we always capture the HTTP code safely.
+                            // We ping the root endpoint '/' instead of API endpoints.
+                            // Since we have no root handler, a running server will return 404 Not Found.
+                            // This safely bypasses the auth/lockdown middleware which can abruptly drop unauthenticated connections.
                             def status = sh(script: '''
-                                CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 2 "''' + url + '''/list-pending" || echo "000")
+                                CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 2 "''' + url + '''/" || echo "000")
                                 echo $CODE
                             ''', returnStdout: true).trim()
                             
-                            if (status == '200' || status == '401' || status == '403') {
+                            if (status == '404' || status == '200' || status == '401' || status == '403') {
                                 env.REACHABLE_SERVICE = url
                                 echo "Success! Reached server at ${url}"
                                 break
