@@ -76,9 +76,14 @@ pipeline {
                     for (url in candidateUrls) {
                         try {
                             echo "Testing connection to ${url}..."
-                            // Try calling list-pending which should return 200 or 403 (if lockdown active)
-                            def status = sh(script: "curl -s -o /dev/null -w '%{http_code}' --connect-timeout 2 ${url}/list-pending || true", returnStdout: true).trim()
-                            if (status == '200' || status == '403') {
+                            // Try calling list-pending. A 200, 401 (auth required), or 403 (lockdown) means the server is UP.
+                            // We use a bash script to ensure we always capture the HTTP code safely.
+                            def status = sh(script: '''
+                                CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 2 "''' + url + '''/list-pending" || echo "000")
+                                echo $CODE
+                            ''', returnStdout: true).trim()
+                            
+                            if (status == '200' || status == '401' || status == '403') {
                                 env.REACHABLE_SERVICE = url
                                 echo "Success! Reached server at ${url}"
                                 break
@@ -143,20 +148,6 @@ pipeline {
             }
         }
         
-        stage('Download Signature Bundle') {
-            steps {
-                dir('examples/simple-app') {
-                    sh """
-                        # Download the full cosign bundle which contains the ECDSA signature
-                        curl -sSL -o tfplan.bundle ${REACHABLE_SERVICE}/download/${env.PLAN_ID}/bundle || true
-                        
-                        # Also download legacy signature as fallback
-                        curl -sSL -o tfplan.sig ${REACHABLE_SERVICE}/download/${env.PLAN_ID}/signature || true
-                    """
-                }
-            }
-        }
-        
     stage('Verify and Apply') {
             steps {
                 dir('examples/simple-app') {
@@ -166,7 +157,8 @@ pipeline {
                         
                         # Use the admin.pub file natively stored in the repository
                         # instead of the Jenkins credential to bypass formatting errors.
-                        terrasign wrap --key admin.pub -- apply tfplan
+                        # It dynamically discovers all .pub files via --key-dir.
+                        terrasign wrap --key-dir . -- apply tfplan
                     '''
                 }
             }
