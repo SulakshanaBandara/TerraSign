@@ -154,7 +154,7 @@ pipeline {
                 dir('examples/simple-app') {
                     // Use terrasign wrapper to verify before applying
                     sh '''
-                        export PATH=$PATH:$HOME/go/bin
+                        export PATH=$HOME/go/bin:$PATH
                         
                         # Use the admin.pub file natively stored in the repository
                         # instead of the Jenkins credential to bypass formatting errors.
