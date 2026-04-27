@@ -11,7 +11,7 @@ import (
 )
 
 // Verify invokes the cosign CLI to verify the signature of the given file.
-// It requires expected identity and issuer for keyless verification, OR a key for key-based verification.
+// It requires a key path for key-based verification, OR identity+issuer for keyless.
 func Verify(planPath, keyPath, identity, issuer string) error {
 	fmt.Printf("Verifying plan at %s\n", planPath)
 
@@ -40,7 +40,6 @@ func Verify(planPath, keyPath, identity, issuer string) error {
 	if err != nil {
 		fmt.Printf("⚠️  Warning: No provenance found (plan may predate provenance generation)\n")
 	} else {
-		// Verify provenance is from trusted builder
 		fmt.Printf("  Builder: %s\n", slsaProvenance.Predicate.Builder.ID)
 		fmt.Printf("  Build Type: %s\n", slsaProvenance.Predicate.BuildType)
 		fmt.Println("[OK] Provenance verified")
@@ -60,29 +59,26 @@ func Verify(planPath, keyPath, identity, issuer string) error {
 	return nil
 }
 
-// verifyCosignSignature verifies the cryptographic signature
+// verifyCosignSignature verifies the cryptographic signature using the cosign bundle.
+// Uses --bundle so cosign handles encoding internally (avoids ASN.1 vs IEEE-P1363 issues).
+// IMPORTANT: signing (Mac) and verification (Jenkins) must use the same cosign version.
+// Current pinned version: v3.0.2 on both Mac and Jenkins container.
 func verifyCosignSignature(planPath, keyPath, identity, issuer string) error {
 	bundleFile := planPath + ".bundle"
-	sigFile := planPath + ".sig"
 	certFile := planPath + ".crt"
 
-	// Basic check if files exist
 	if _, err := os.Stat(bundleFile); os.IsNotExist(err) {
 		return fmt.Errorf("bundle file not found: %s", bundleFile)
 	}
-	if _, err := os.Stat(sigFile); os.IsNotExist(err) {
-		return fmt.Errorf("signature file not found: %s", sigFile)
-	}
 
 	args := []string{"verify-blob",
-		"--signature", sigFile,
+		"--bundle", bundleFile,
+		"--insecure-ignore-tlog=true",
 	}
 
 	if keyPath != "" {
 		args = append(args, "--key", keyPath)
-		args = append(args, "--insecure-ignore-tlog=true")
 	} else {
-		// Keyless mode requires certificate, identity, and issuer
 		if _, err := os.Stat(certFile); os.IsNotExist(err) {
 			return fmt.Errorf("certificate file not found: %s (required for keyless verification)", certFile)
 		}
