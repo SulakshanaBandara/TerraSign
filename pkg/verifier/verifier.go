@@ -26,7 +26,7 @@ func Verify(planPath, keyPath, identity, issuer string) error {
 	fmt.Println("Step 2/4: Verifying policy compliance...")
 	policyResult, err := policy.LoadAttestation(planPath)
 	if err != nil {
-		fmt.Printf("⚠️  Warning: No policy attestation found (plan may predate policy checks)\n")
+		fmt.Println("[WARN] No policy attestation found (plan may predate policy checks)")
 	} else {
 		if !policyResult.Passed {
 			return fmt.Errorf("plan failed policy checks: %d violations", len(policyResult.Violations))
@@ -38,7 +38,7 @@ func Verify(planPath, keyPath, identity, issuer string) error {
 	fmt.Println("Step 3/4: Verifying SLSA provenance...")
 	slsaProvenance, err := provenance.LoadProvenance(planPath)
 	if err != nil {
-		fmt.Printf("⚠️  Warning: No provenance found (plan may predate provenance generation)\n")
+		fmt.Println("[WARN] No provenance found (plan may predate provenance generation)")
 	} else {
 		// Verify provenance is from trusted builder
 		fmt.Printf("  Builder: %s\n", slsaProvenance.Predicate.Builder.ID)
@@ -63,26 +63,25 @@ func Verify(planPath, keyPath, identity, issuer string) error {
 // verifyCosignSignature verifies the cryptographic signature
 func verifyCosignSignature(planPath, keyPath, identity, issuer string) error {
 	bundleFile := planPath + ".bundle"
-	sigFile := planPath + ".sig"
 	certFile := planPath + ".crt"
 
-	// Basic check if files exist
+	// Bundle must exist — it contains all verification material
 	if _, err := os.Stat(bundleFile); os.IsNotExist(err) {
 		return fmt.Errorf("bundle file not found: %s", bundleFile)
 	}
-	if _, err := os.Stat(sigFile); os.IsNotExist(err) {
-		return fmt.Errorf("signature file not found: %s", sigFile)
-	}
 
+	// Use --bundle flag so cosign handles the signature format internally.
+	// Passing --signature with the raw base64 from messageSignature.signature
+	// fails in cosign v2+ because it is ASN.1/DER encoded, not IEEE P1363 (r||s).
 	args := []string{"verify-blob",
-		"--signature", sigFile,
+		"--bundle", bundleFile,
+		"--insecure-ignore-tlog=true",
 	}
 
 	if keyPath != "" {
 		args = append(args, "--key", keyPath)
-		args = append(args, "--insecure-ignore-tlog=true")
 	} else {
-		// Keyless mode requires certificate, identity, and issuer
+		// Keyless mode: certificate, identity, and issuer are required
 		if _, err := os.Stat(certFile); os.IsNotExist(err) {
 			return fmt.Errorf("certificate file not found: %s (required for keyless verification)", certFile)
 		}

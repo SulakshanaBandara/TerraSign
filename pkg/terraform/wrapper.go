@@ -3,7 +3,6 @@ package terraform
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -67,42 +66,42 @@ func Execute(args []string, keyDir, identity, issuer, serviceURL string) error {
 			// 3. Download bundles for all approvers
 			for _, approval := range sub.Approvals {
 				bundlePath := fmt.Sprintf("%s-%s.bundle", planFile, approval.Reviewer)
-				sigPath := fmt.Sprintf("%s-%s.sig", planFile, approval.Reviewer) // We must extract the sig to avoid ASN.1 errors
 
 				fmt.Printf("  Downloading bundle for approver: %s...\n", approval.Reviewer)
 				if err := client.DownloadBundleForApprover(sub.ID, approval.Reviewer, bundlePath); err != nil {
 					return fmt.Errorf("failed to download bundle for %s: %w", approval.Reviewer, err)
 				}
 
-				// Optional: Extract signature if using the standard verifier
-				// By convention, verifier.Verify() expects the exact .bundle and .sig extensions
-				// For the prototype we rename the file temporarily for the verifier, then delete
 				defer os.Remove(bundlePath)
-				defer os.Remove(sigPath)
 			}
 
-			// We need to run verifier.Verify on the plan for each signed bundle.
-			// Currently verifier.Verify assumes fixed filenames `planFile.bundle` and `planFile.sig`.
-			// We temporarily rename each approver's bundle to the expected name, verify it, then restore.
+			// 4. Download policy attestation and SLSA provenance so Steps 2 & 3 of
+			//    verifier.Verify() can read them (they are stored server-side after admin sign).
+			policyPath := planFile + ".policy"
+			provenancePath := planFile + ".provenance"
+			if err := client.DownloadPolicyAttestation(sub.ID, policyPath); err != nil {
+				fmt.Printf("  [INFO] Policy attestation not available on server: %v\n", err)
+			} else {
+				fmt.Println("  [OK] Policy attestation downloaded")
+				defer os.Remove(policyPath)
+			}
+			if err := client.DownloadProvenance(sub.ID, provenancePath); err != nil {
+				fmt.Printf("  [INFO] SLSA provenance not available on server: %v\n", err)
+			} else {
+				fmt.Println("  [OK] SLSA provenance downloaded")
+				defer os.Remove(provenancePath)
+			}
+
+			// Verify each approver's bundle.
+			// We rename each approver's bundle to planFile+".bundle" (the path verifier.Verify expects),
+			// run verification, then clean up.
+
 			validApprovals := 0
 			for _, approval := range sub.Approvals {
 				bundlePath := fmt.Sprintf("%s-%s.bundle", planFile, approval.Reviewer)
 
-				// Move it to the target location expected by verifier
+				// Move bundle to the expected location (planFile+".bundle") for verifier.Verify
 				os.Rename(bundlePath, planFile+".bundle")
-
-				// Extract the raw signature directly out of the bundle JSON to avoid ASN.1 encoding issues
-				bundleData, err := os.ReadFile(planFile + ".bundle")
-				if err == nil {
-					var bundleObj struct {
-						MessageSignature struct {
-							Signature string `json:"signature"`
-						} `json:"messageSignature"`
-					}
-					if err := json.Unmarshal(bundleData, &bundleObj); err == nil && bundleObj.MessageSignature.Signature != "" {
-						os.WriteFile(planFile+".sig", []byte(bundleObj.MessageSignature.Signature), 0644)
-					}
-				}
 
 				fmt.Printf("\n--- Verifying signature from %s ---\n", approval.Reviewer)
 
@@ -129,7 +128,6 @@ func Execute(args []string, keyDir, identity, issuer, serviceURL string) error {
 				}
 
 				os.Remove(planFile + ".bundle")
-				os.Remove(planFile + ".sig")
 
 				if !verified {
 					return fmt.Errorf("cryptographic verification failed for approver %s bundle", approval.Reviewer)

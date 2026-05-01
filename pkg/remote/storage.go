@@ -161,6 +161,16 @@ func (s *Storage) GetBundlePath(id string) string {
 	return filepath.Join(s.baseDir, id, "tfplan.bundle")
 }
 
+// GetPolicyAttestationPath returns the path to the policy attestation file
+func (s *Storage) GetPolicyAttestationPath(id string) string {
+	return filepath.Join(s.baseDir, id, "tfplan.policy")
+}
+
+// GetProvenancePath returns the path to the SLSA provenance file
+func (s *Storage) GetProvenancePath(id string) string {
+	return filepath.Join(s.baseDir, id, "tfplan.provenance")
+}
+
 // GetBundlePathForApprover returns the bundle path for a specific approver
 func (s *Storage) GetBundlePathForApprover(id, approver string) string {
 	// Sanitize approver name for use as filename

@@ -3,6 +3,7 @@ package remote
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -39,6 +40,7 @@ func (s *SigningService) Start() error {
 	http.HandleFunc("/approvals/", s.checkAuth(s.checkLockdown(s.handleGetApprovals)))
 	http.HandleFunc("/upload-signature/", s.checkAuth(s.checkLockdown(s.handleUploadSignature)))
 	http.HandleFunc("/upload-bundle/", s.checkAuth(s.checkLockdown(s.handleUploadBundle)))
+	http.HandleFunc("/upload-file/", s.checkAuth(s.checkLockdown(s.handleUploadFile)))
 	http.HandleFunc("/reject/", s.checkAuth(s.checkLockdown(s.handleReject)))
 	http.HandleFunc("/policy", s.checkAuth(s.handlePolicy))
 	http.HandleFunc("/lockdown", s.checkAuth(s.handleLockdown))
@@ -265,6 +267,10 @@ func (s *SigningService) handleDownload(w http.ResponseWriter, r *http.Request) 
 		} else {
 			filePath = s.storage.GetBundlePath(id)
 		}
+	case "policy":
+		filePath = s.storage.GetPolicyAttestationPath(id)
+	case "provenance":
+		filePath = s.storage.GetProvenancePath(id)
 	default:
 		http.Error(w, "Invalid file type", http.StatusBadRequest)
 		return
@@ -385,4 +391,54 @@ func (s *SigningService) handleReject(w http.ResponseWriter, r *http.Request) {
 		"status": "rejected",
 		"reason": reason,
 	})
+}
+
+// handleUploadFile handles generic file uploads (policy attestation, SLSA provenance) from admin clients.
+// The file type is specified by the ?type= query param and must be one of: policy, provenance.
+func (s *SigningService) handleUploadFile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract ID from path: /upload-file/{id}
+	id := r.URL.Path[len("/upload-file/"):]
+	if id == "" {
+		http.Error(w, "Missing submission ID", http.StatusBadRequest)
+		return
+	}
+
+	fileType := r.URL.Query().Get("type")
+	var destPath string
+	switch fileType {
+	case "policy":
+		destPath = s.storage.GetPolicyAttestationPath(id)
+	case "provenance":
+		destPath = s.storage.GetProvenancePath(id)
+	default:
+		http.Error(w, "Invalid file type; must be 'policy' or 'provenance'", http.StatusBadRequest)
+		return
+	}
+
+	// Verify the submission exists
+	if _, err := s.storage.GetSubmission(id); err != nil {
+		http.Error(w, "Submission not found", http.StatusNotFound)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read body", http.StatusInternalServerError)
+		return
+	}
+
+	if err := os.WriteFile(destPath, data, 0644); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to write file: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Printf("[UPLOAD] %s file stored for submission %s\n", fileType, id)
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "%s uploaded for %s\n", fileType, id)
 }

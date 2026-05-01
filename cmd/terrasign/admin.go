@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sulakshanakarunarathne/terrasign/pkg/policy"
+	"github.com/sulakshanakarunarathne/terrasign/pkg/provenance"
 	"github.com/sulakshanakarunarathne/terrasign/pkg/remote"
 	"github.com/sulakshanakarunarathne/terrasign/pkg/signer"
 )
@@ -171,6 +173,52 @@ func (a *AdminCommands) Sign(id, keyPath, reviewer string) error {
 	if err := a.client.UploadBundleForApprover(id, bundlePath, reviewer, keyHint, pubKeyPath); err != nil {
 		// Return the error — duplicate key rejection should be visible to the admin
 		return fmt.Errorf("approval rejected by server: %w", err)
+	}
+
+	// Generate and upload policy attestation
+	fmt.Println("Evaluating security policies...")
+	policyEngine := policy.NewPolicyEngine("./policies")
+	policyResult, policyErr := policyEngine.Evaluate(planPath)
+	if policyErr != nil {
+		fmt.Printf("[WARN] Policy evaluation skipped: %v\n", policyErr)
+	} else {
+		if !policyResult.Passed {
+			fmt.Println("[WARN] Policy violations detected:")
+			for _, v := range policyResult.Violations {
+				fmt.Printf("  - [%s] %s\n", v.Policy, v.Message)
+			}
+		} else {
+			fmt.Println("[OK] All policy checks passed")
+		}
+		policyPath := planPath + ".policy"
+		if err := policyEngine.SaveAttestation(planPath, policyResult); err == nil {
+			if err := a.client.UploadFile(id, policyPath, "policy"); err != nil {
+				fmt.Printf("[WARN] Could not upload policy attestation: %v\n", err)
+			} else {
+				fmt.Println("[OK] Policy attestation uploaded")
+			}
+		}
+	}
+
+	// Generate and upload SLSA provenance
+	fmt.Println("Generating SLSA provenance...")
+	builderID := "https://github.com/actions/runner/v2"
+	if benv := os.Getenv("JENKINS_URL"); benv != "" {
+		builderID = benv
+	}
+	provenanceGen := provenance.NewProvenanceGenerator(builderID)
+	slsaProvenance, provenanceErr := provenanceGen.Generate(planPath, time.Now().Add(-5*time.Minute))
+	if provenanceErr != nil {
+		fmt.Printf("[WARN] SLSA provenance generation failed: %v\n", provenanceErr)
+	} else {
+		provenancePath := planPath + ".provenance"
+		if err := provenanceGen.Save(slsaProvenance, planPath); err == nil {
+			if err := a.client.UploadFile(id, provenancePath, "provenance"); err != nil {
+				fmt.Printf("[WARN] Could not upload provenance: %v\n", err)
+			} else {
+				fmt.Println("[OK] SLSA provenance uploaded")
+			}
+		}
 	}
 
 	// Fetch and display updated approval status

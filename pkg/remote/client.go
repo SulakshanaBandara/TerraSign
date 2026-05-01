@@ -186,6 +186,44 @@ func (c *Client) DownloadBundleForApprover(id, approver, outputPath string) erro
 	return c.downloadFile(id, "bundle", approver, outputPath)
 }
 
+// DownloadPolicyAttestation downloads the policy attestation file for a submission
+func (c *Client) DownloadPolicyAttestation(id, outputPath string) error {
+	return c.downloadFile(id, "policy", "", outputPath)
+}
+
+// DownloadProvenance downloads the SLSA provenance file for a submission
+func (c *Client) DownloadProvenance(id, outputPath string) error {
+	return c.downloadFile(id, "provenance", "", outputPath)
+}
+
+// UploadFile uploads an arbitrary file to the server for a given submission.
+// fileType is used in the URL path: /upload-file/{id}?type={fileType}
+func (c *Client) UploadFile(id, filePath, fileType string) error {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to read %s: %w", fileType, err)
+	}
+
+	url := fmt.Sprintf("%s/upload-file/%s?type=%s", c.baseURL, id, fileType)
+	req, err := http.NewRequest("POST", url, bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to upload %s: %w", fileType, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("server error: %s", string(body))
+	}
+
+	return nil
+}
+
 // downloadFile downloads a file from the service
 func (c *Client) downloadFile(id, fileType, approver, outputPath string) error {
 	url := fmt.Sprintf("%s/download/%s/%s", c.baseURL, id, fileType)
